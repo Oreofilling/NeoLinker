@@ -212,6 +212,84 @@ void main() {
 
       expect(received.single.macSuffix, '84C102');
     });
+
+    test('setIncludeVirtualNics rebinds a live channel on the new pool',
+        () async {
+      final sockets = <RawDatagramSocket>[];
+      var socketsClosed = 0;
+      final enumerationFlags = <bool>[];
+      // Two live sockets so the rebind swaps to a fresh one; the closed
+      // counter proves the old listener was released, not leaked.
+      final pool = [
+        await RawDatagramSocket.bind(InternetAddress.loopbackIPv4, 0),
+        await RawDatagramSocket.bind(InternetAddress.loopbackIPv4, 0),
+      ];
+      final source = CtDiscDiscoverySource(
+        nicEnumerator: ({bool includeVirtual = false}) async {
+          enumerationFlags.add(includeVirtual);
+          return [
+            NicEndpoint(
+              interfaceName: includeVirtual ? 'vEthernet (Hyper-V)' : 'lo0',
+              address: InternetAddress.loopbackIPv4,
+              nicClass: includeVirtual
+                  ? NicClass.virtualOrVpn
+                  : NicClass.physical,
+            ),
+          ];
+        },
+        socketFactory: (names) async {
+          final socket = pool[sockets.length];
+          sockets.add(socket);
+          return _CountingCloseSocket(socket, () => socketsClosed++);
+        },
+      );
+      await source.start();
+      expect(source.joinedNics.single.interfaceName, 'lo0');
+      expect(source.includeVirtualNics, isFalse);
+
+      await source.setIncludeVirtualNics(true);
+
+      // The old socket was closed and a fresh bind happened with the
+      // wider pool; joined NICs now carry the virtual endpoint.
+      expect(socketsClosed, 1);
+      expect(enumerationFlags, [false, true]);
+      expect(source.includeVirtualNics, isTrue);
+      expect(source.joinedNics.single.interfaceName, 'vEthernet (Hyper-V)');
+
+      // Same flag again is a no-op: no rebind, no extra enumeration.
+      await source.setIncludeVirtualNics(true);
+      expect(enumerationFlags, [false, true]);
+
+      await source.stop();
+    });
+
+    test('setIncludeVirtualNics while stopped only records the flag',
+        () async {
+      final enumerationFlags = <bool>[];
+      final loopbackSocket = await RawDatagramSocket.bind(
+        InternetAddress.loopbackIPv4,
+        0,
+      );
+      var factoryCalls = 0;
+      final source = CtDiscDiscoverySource(
+        nicEnumerator: ({bool includeVirtual = false}) async {
+          enumerationFlags.add(includeVirtual);
+          return [];
+        },
+        socketFactory: (names) async {
+          factoryCalls++;
+          return loopbackSocket;
+        },
+      );
+      await source.setIncludeVirtualNics(true);
+      expect(factoryCalls, 0); // no socket churn while stopped
+
+      await source.start();
+      expect(enumerationFlags, [true]); // start honors the recorded flag
+      expect(source.includeVirtualNics, isTrue);
+
+      await source.stop();
+    });
   });
 
   group('CtDiscDiscoverySource', () {
@@ -334,4 +412,53 @@ void main() {
       expect(all.length, greaterThanOrEqualTo(physical.length));
     });
   });
+}
+
+/// RawDatagramSocket wrapper counting close() calls: proves a rebind
+/// released the previous socket instead of leaking it. Only the members
+/// CtDiscDiscoverySource touches on the factory path are forwarded; the
+/// rest stay on noSuchMethod.
+final class _CountingCloseSocket implements RawDatagramSocket {
+  _CountingCloseSocket(this._inner, this.onClose);
+
+  final RawDatagramSocket _inner;
+  final void Function() onClose;
+  bool _closed = false;
+
+  @override
+  void close() {
+    if (_closed) return;
+    _closed = true;
+    onClose();
+    _inner.close();
+  }
+
+  @override
+  StreamSubscription<RawSocketEvent> listen(
+    void Function(RawSocketEvent)? onData, {
+    Function? onError,
+    void Function()? onDone,
+    bool? cancelOnError,
+  }) =>
+      _inner.listen(
+        onData,
+        onError: onError,
+        onDone: onDone,
+        cancelOnError: cancelOnError,
+      );
+
+  @override
+  Datagram? receive() => _inner.receive();
+
+  @override
+  int send(List<int> buffer, InternetAddress address, int port) =>
+      _inner.send(buffer, address, port);
+
+  @override
+  void setRawOption(RawSocketOption option) => _inner.setRawOption(option);
+
+  // Declared (not inherited) so unforwarded interface members stay legal;
+  // anything reaching here is a source change worth failing on.
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

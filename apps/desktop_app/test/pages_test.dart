@@ -945,6 +945,80 @@ void main() {
     expect(find.text('未发现您的设备'), findsOneWidget);
   });
 
+  testWidgets('§13.1 NIC picker: 切换后标签跟随重绑结果', (tester) async {
+    // A real ct-disc child behind a microtask-only socket: widget tests
+    // run under a fake clock, so the rebind's stop/start cycle must not
+    // touch real OS sockets (see _FakeDgramSocket).
+    final ctSource = CtDiscDiscoverySource(
+      nicEnumerator: ({bool includeVirtual = false}) async => [
+        NicEndpoint(
+          interfaceName: includeVirtual ? 'Tailscale' : 'Ethernet',
+          address: InternetAddress.loopbackIPv4,
+          nicClass: includeVirtual
+              ? NicClass.virtualOrVpn
+              : NicClass.physical,
+        ),
+      ],
+      socketFactory: (names) async => _FakeDgramSocket(),
+    );
+    final controller = ProvisioningController(
+      environmentProbe: readyProbe(),
+      discoverySource: CompositeDiscoverySource([ctSource]),
+      establishPairing: (_) async {},
+      connectChannel: (_, __) async => FakeCtDevice(),
+      linkEvents: (_) => const Stream<bool>.empty(),
+      selfCheckHold: Duration.zero,
+    );
+    addTearDown(controller.dispose);
+    addTearDown(ctSource.stop);
+
+    await pumpApp(tester, controller);
+    await settle(tester); // 自检放行 → 扫描，ct-disc 已组播加入
+
+    await tester.tap(find.text('查看详情'));
+    await settle(tester);
+    expect(find.text('Ethernet (127.0.0.1)'), findsOneWidget);
+    final toggle = find.byKey(const ValueKey('scan-nic-virtual-toggle'));
+    expect(
+      tester.widget<NLButton>(toggle).label,
+      '包含虚拟网卡', // 默认仅物理网卡：动作钮邀请扩池
+    );
+
+    await tester.tap(toggle);
+    await settle(tester);
+    // Layered asserts: whichever fails first names the layer that stopped —
+    // tap dispatch, controller fan-out, or the stop/start rebind itself.
+    expect(
+      ctSource.includeVirtualNics,
+      isTrue,
+      reason: 'tap never reached the source',
+    );
+    expect(
+      controller.ctDiscIncludesVirtualNics,
+      isTrue,
+      reason: 'controller flag never flipped',
+    );
+    for (var i = 0;
+        i < 50 && !controller.ctDiscNicLabels.contains('Tailscale (127.0.0.1)');
+        i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    expect(
+      controller.ctDiscNicLabels,
+      contains('Tailscale (127.0.0.1)'),
+      reason: 'rebind never re-joined',
+    );
+    await settle(tester);
+    expect(find.text('Tailscale (127.0.0.1)'), findsOneWidget);
+    expect(tester.widget<NLButton>(toggle).label, '仅物理网卡');
+
+    // End past the scan window (suite convention: every page test exits
+    // into a quiet phase, so no scan/sweep timer is still armed at
+    // teardown).
+    await tester.pump(const Duration(seconds: 21));
+    expect(controller.phase, SessionPhase.scanEmpty);
+  });
+
   testWidgets('M3d recheck feedback: running label, then last-checked stamp', (
     tester,
   ) async {
@@ -1368,4 +1442,51 @@ void main() {
     await tester.pump(const Duration(seconds: 21));
     expect(controller.phase, SessionPhase.scanEmpty);
   });
+}
+
+/// Widget tests run under a fake async clock, where a socket stream
+/// subscription's cancel() NEVER completes (its settlement needs a live
+/// event-loop turn, not microtasks — verified empirically: both a plain
+/// StreamController's and Stream.empty()'s cancel stay pending across
+/// pumps). The NIC picker's stop() would hang the rebind forever. This
+/// stub keeps every leg microtask-only — including a cancel() that
+/// settles immediately — so both the initial bind and the picker's
+/// stop/start rebind converge inside pump(). Real-socket rebinding,
+/// real cancel semantics, is covered by the controller test.
+final class _FakeDgramSocket implements RawDatagramSocket {
+  @override
+  StreamSubscription<RawSocketEvent> listen(
+    void Function(RawSocketEvent event)? onData, {
+    Function? onError,
+    void Function()? onDone,
+    bool? cancelOnError,
+  }) =>
+      _NeverEventsSubscription();
+
+  @override
+  Datagram? receive() => null;
+
+  @override
+  int send(List<int> buffer, InternetAddress address, int port) =>
+      buffer.length;
+
+  @override
+  void setRawOption(RawSocketOption option) {}
+
+  @override
+  void close() {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+/// A subscription to a stream that never emits and cancels without
+/// touching the event loop.
+final class _NeverEventsSubscription
+    implements StreamSubscription<RawSocketEvent> {
+  @override
+  Future<void> cancel() async {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

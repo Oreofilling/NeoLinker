@@ -244,25 +244,41 @@ class ProvisioningController extends ChangeNotifier {
   static String _mergeKeyOf(DiscoveryCandidate candidate) =>
       (candidate.macSuffix ?? candidate.candidateId).toUpperCase();
 
+  /// The wired ct-disc source — plain, or the child of the composite.
+  /// Null with an injected source carrying none (picker hides itself).
+  CtDiscDiscoverySource? get _ctDiscSource {
+    DiscoverySource? source = _source;
+    if (source is CtDiscDiscoverySource) return source;
+    if (source is CompositeDiscoverySource) {
+      for (final child in source.sources) {
+        if (child is CtDiscDiscoverySource) return child;
+      }
+    }
+    return null;
+  }
+
   /// NICs the CT-Disc listener joined (interface + subnet, §13.1: the user
   /// can see which sending interfaces are in play with VPN/virtual NICs
   /// around). Empty before the scan starts or with an injected source.
-  List<String> get ctDiscNicLabels {
-    DiscoverySource? source = _source;
-    if (source is! CtDiscDiscoverySource &&
-        source is CompositeDiscoverySource) {
-      for (final child in source.sources) {
-        if (child is CtDiscDiscoverySource) {
-          source = child;
-          break;
-        }
-      }
-    }
-    if (source is! CtDiscDiscoverySource) return const <String>[];
-    return [
-      for (final nic in source.joinedNics)
-        if (nic.nicClass == NicClass.physical) nic.label,
-    ];
+  /// Virtual/VPN entries appear once the NIC picker opts them in — the
+  /// list mirrors the real join set, so the toggle's effect stays visible.
+  List<String> get ctDiscNicLabels => [
+        for (final nic in _ctDiscSource?.joinedNics ?? const <NicEndpoint>[])
+          nic.label,
+      ];
+
+  /// Whether the CT-Disc NIC pool includes VPN/virtual adapters; null
+  /// when no ct-disc channel is wired.
+  bool? get ctDiscIncludesVirtualNics => _ctDiscSource?.includeVirtualNics;
+
+  /// NIC picker action: widen or narrow the ct-disc NIC pool. The
+  /// channel rebinds on the new pool; rows only the old pool could see
+  /// age out by TTL. No-op without a ct-disc source.
+  Future<void> setCtDiscIncludeVirtualNics(bool includeVirtual) async {
+    final source = _ctDiscSource;
+    if (source == null) return;
+    await source.setIncludeVirtualNics(includeVirtual);
+    notifyListeners();
   }
 
   /// Machine phase -> flow page id (the shell switches its workspace on

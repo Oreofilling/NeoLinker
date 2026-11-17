@@ -152,7 +152,10 @@ final class CtDiscDiscoverySource
     RawDatagramSocket socket,
     List<NicEndpoint> joinedNics,
   )? _probeSender;
-  final bool _includeVirtual;
+
+  /// NIC pool flag: physical-only by default; the NIC picker widens it
+  /// to VPN/virtual adapters. Mutable — [setIncludeVirtualNics] rebinds.
+  bool _includeVirtual;
   final DateTime Function()? _now;
 
   final _candidates = StreamController<DiscoveryCandidate>.broadcast();
@@ -238,6 +241,21 @@ final class CtDiscDiscoverySource
     } catch (_) {
       // Same posture as the start-time probe: never fatal.
     }
+  }
+
+  /// Whether the NIC pool includes VPN/virtual adapters (picker state).
+  bool get includeVirtualNics => _includeVirtual;
+
+  /// Widens or narrows the NIC pool. Same-flag calls are no-ops; a live
+  /// channel rebinds on the new pool (candidates that only the old pool
+  /// could see age out by TTL); a stopped channel just records the flag
+  /// for its next start.
+  Future<void> setIncludeVirtualNics(bool includeVirtual) async {
+    if (_includeVirtual == includeVirtual) return;
+    _includeVirtual = includeVirtual;
+    if (_socket == null) return;
+    await stop();
+    await start();
   }
 
   /// Binds once and joins the group through every selected NIC.

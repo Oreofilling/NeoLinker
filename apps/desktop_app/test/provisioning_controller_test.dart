@@ -1118,6 +1118,69 @@ void main() {
     });
   });
 
+  group('ct-disc NIC picker (§13.1)', () {
+    test('setCtDiscIncludeVirtualNics rebinds the wired ct-disc child',
+        () async {
+      // A fresh socket per factory call: RawDatagramSocket is a
+      // single-subscription stream, so re-serving the first socket after
+      // the rebind's stop() would fail the second listen() and clear
+      // joinedNics — the same trap a production restart must avoid.
+      final enumerationFlags = <bool>[];
+      final ctSource = CtDiscDiscoverySource(
+        nicEnumerator: ({bool includeVirtual = false}) async {
+          enumerationFlags.add(includeVirtual);
+          return [
+            NicEndpoint(
+              interfaceName: includeVirtual ? 'Tailscale' : 'Ethernet',
+              address: InternetAddress.loopbackIPv4,
+              nicClass: includeVirtual
+                  ? NicClass.virtualOrVpn
+                  : NicClass.physical,
+            ),
+          ];
+        },
+        socketFactory: (names) =>
+            RawDatagramSocket.bind(InternetAddress.loopbackIPv4, 0),
+      );
+      final controller = ProvisioningController(
+        environmentProbe: readyProbe(),
+        discoverySource: CompositeDiscoverySource([ctSource]),
+        establishPairing: (_) async {},
+        connectChannel: (_, __) async => FakeCtDevice(),
+        linkEvents: (_) => const Stream<bool>.empty(),
+        selfCheckHold: Duration.zero,
+      );
+      addTearDown(controller.dispose);
+      addTearDown(ctSource.stop);
+
+      await controller.runSelfCheck();
+      await until(
+        () => controller.ctDiscNicLabels.isNotEmpty,
+        'scan did not bind the ct-disc channel',
+      );
+      expect(controller.ctDiscNicLabels, ['Ethernet (127.0.0.1)']);
+      expect(controller.ctDiscIncludesVirtualNics, isFalse);
+
+      // Picker action: the channel re-enumerates with the wider pool and
+      // the label list mirrors the new join set (virtual NIC visible).
+      await controller.setCtDiscIncludeVirtualNics(true);
+      expect(enumerationFlags, [false, true]);
+      expect(controller.ctDiscIncludesVirtualNics, isTrue);
+      expect(controller.ctDiscNicLabels, ['Tailscale (127.0.0.1)']);
+    });
+
+    test('picker API is a no-op without a wired ct-disc source', () async {
+      final source = FakeSource();
+      final controller = makeController(source);
+      addTearDown(controller.dispose);
+      addTearDown(source.close);
+
+      expect(controller.ctDiscIncludesVirtualNics, isNull);
+      await controller.setCtDiscIncludeVirtualNics(true); // must not throw
+      expect(controller.ctDiscNicLabels, isEmpty);
+    });
+  });
+
   group('M5 three-channel scan', () {
     test(
       'AP-only rows join the softAP chain; CT-Disc-only rows fail stable',

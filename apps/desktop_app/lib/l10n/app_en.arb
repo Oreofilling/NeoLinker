@@ -226,6 +226,8 @@
   "chRemarkAp": "Adapter enumeration · admin rights needed",
   "chRemarkDisc": "Network discovery · LAN multicast listener",
   "scanChannelOpenWifiSettings": "Open Wi-Fi settings",
+  "scanNicIncludeVirtual": "Include virtual NICs",
+  "scanNicPhysicalOnly": "Physical NICs only",
   "tbDevice": "Device",
   "tbChannel": "Channel",
   "tbSignalCol": "Signal",
