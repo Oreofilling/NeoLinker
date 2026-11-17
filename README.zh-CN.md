@@ -1,13 +1,17 @@
+<div align="right">
+
+[English](README.md) | **简体中文**
+
+</div>
+
 # NeoLinker
 
-[![CI](https://github.com/Oreofilling/neolinker/actions/workflows/ci.yml/badge.svg)](https://github.com/Oreofilling/neolinker/actions/workflows/ci.yml)
-[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![CI](https://github.com/Oreofilling/NeoLinker/actions/workflows/ci.yml/badge.svg)](https://github.com/Oreofilling/NeoLinker/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg?logo=apache)](LICENSE)
 
 NeoLinker 是面向 **CamThink NE 系列低功耗 AI 相机**的 Windows 桌面配置工具：
 通过蓝牙（BLE）、设备 softAP 或局域网发现设备，完成连接 → 配置 → 校验的
 完整配置流程，并为每台设备生成可留存的纯文本回执。界面中英双语、亮暗双主题。
-
-[English README](README.md)
 
 ## 功能
 
@@ -27,15 +31,15 @@ NeoLinker 是面向 **CamThink NE 系列低功耗 AI 相机**的 Windows 桌面�
 | 机型 | BLE（CT-Prov/1） | SoftAP（CT-Prov over HTTP） | LAN（CT-Disc） | 备注 |
 | ---- | :---: | :---: | :---: | ---- |
 | NE101 | ✅ | ✅ | — | 主目标机型；BLE 链路已真机端到端验证 |
-| NE301 | ✅ | ✅ | — | 同协议；通讯模块配置（Wi-Fi / 蜂窝 / MQTT / webhook） |
+| NE301 | 🚧 | ✅ | — | 暂只走 softAP，BLE 计划中；通讯模块配置（Wi-Fi / 蜂窝 / MQTT / webhook） |
 | NE503 | — | — | ✅ | 发现 + 内嵌管理页；最新、真机暴露最少的一路 |
 
-真机测试目前以 NE101 为主；NE301 走同一套 CT-Prov/1 协议与黄金向量；
+真机测试目前以 NE101 为主；NE301 暂只支持 softAP 配置（BLE 计划中）；
 NE503 支持较新。
 
 ## 下载
 
-从 [Releases](https://github.com/Oreofilling/neolinker/releases) 下载
+从 [Releases](https://github.com/Oreofilling/NeoLinker/releases) 下载
 `NeoLinker_v0.2.0_windows_x64.zip`，解压后直接运行 `NeoLinker.exe`，无需安装。
 
 运行要求：Windows 10/11 x64、WebView2 Evergreen 运行时（Win11 及多数已更新
@@ -52,7 +56,7 @@ NE503 支持较新。
 - `PATH` 上有 `nuget.exe`（WebView2 插件构建时还原 NuGet 包）
 
 ```bash
-git clone https://github.com/Oreofilling/neolinker.git
+git clone https://github.com/Oreofilling/NeoLinker.git
 cd neolinker/apps/desktop_app
 flutter pub get
 flutter gen-l10n          # 改 ARB 后重新生成本地化代码

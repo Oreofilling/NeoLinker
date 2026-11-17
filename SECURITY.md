@@ -17,7 +17,7 @@ Use GitHub's *private vulnerability reporting* on this repository
 (**Security → Report a vulnerability**), which notifies the maintainers
 privately and lets us coordinate a fix and disclosure. If that channel is
 unavailable to you, contact the maintainers via the GitHub profile linked
-on the [repository page](https://github.com/Oreofilling/neolinker).
+on the [repository page](https://github.com/Oreofilling/NeoLinker).
 
 Please include: affected component (app / package name), app version
 (shown in the sidebar footer), Windows version, steps or proof of concept,

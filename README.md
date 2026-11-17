@@ -1,7 +1,13 @@
+<div align="right">
+
+**English** | [简体中文](README.zh-CN.md)
+
+</div>
+
 # NeoLinker
 
-[![CI](https://github.com/Oreofilling/neolinker/actions/workflows/ci.yml/badge.svg)](https://github.com/Oreofilling/neolinker/actions/workflows/ci.yml)
-[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![CI](https://github.com/Oreofilling/NeoLinker/actions/workflows/ci.yml/badge.svg)](https://github.com/Oreofilling/NeoLinker/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg?logo=apache)](LICENSE)
 
 NeoLinker is a Windows desktop tool for discovering, provisioning, and
 configuring **CamThink NE-series low-power AI cameras** — over Bluetooth LE,
@@ -11,8 +17,6 @@ It is a companion tool, not firmware: put a camera into configuration mode,
 pick it up in NeoLinker, and the app walks you through
 connect → configure → verify, leaving a per-device receipt you can keep or
 export. The UI is bilingual (English / 中文) with light and dark themes.
-
-[中文说明](README.zh-CN.md)
 
 ## Features
 
@@ -38,16 +42,17 @@ export. The UI is bilingual (English / 中文) with light and dark themes.
 | Device | BLE (CT-Prov/1) | SoftAP (CT-Prov over HTTP) | LAN (CT-Disc) | Notes |
 | ------ | :---: | :---: | :---: | ----- |
 | NE101  | ✅ | ✅ | — | Primary target; BLE leg field-tested end to end |
-| NE301  | ✅ | ✅ | — | Same protocol; comm-module config (Wi-Fi / cellular / MQTT / webhook) |
+| NE301  | 🚧 | ✅ | — | SoftAP first; BLE planned. Comm-module config (Wi-Fi / cellular / MQTT / webhook) |
 | NE503  | — | — | ✅ | Discovery + embedded management console; newest, least field-tested leg |
 
-Field testing so far has focused on NE101; NE301 uses the same CT-Prov/1
-protocol and golden test vectors, NE503 support is newer.
+Field testing so far has focused on NE101. NE301 currently provisions over
+softAP only — BLE support is planned but not available yet; NE503 support is
+newer.
 
 ## Download
 
 Grab `NeoLinker_v0.2.0_windows_x64.zip` from
-[Releases](https://github.com/Oreofilling/neolinker/releases), unzip, and run
+[Releases](https://github.com/Oreofilling/NeoLinker/releases), unzip, and run
 `NeoLinker.exe`. No installer.
 
 Requirements: Windows 10/11 x64, the WebView2 Evergreen runtime (preinstalled
@@ -69,7 +74,7 @@ Prerequisites:
   build time)
 
 ```bash
-git clone https://github.com/Oreofilling/neolinker.git
+git clone https://github.com/Oreofilling/NeoLinker.git
 cd neolinker/apps/desktop_app
 flutter pub get
 flutter gen-l10n          # regenerate localizations after ARB edits
