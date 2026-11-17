@@ -1,6 +1,6 @@
-# NeoLink Desktop 界面设计规则（v7d）
+# NeoLinker Desktop 界面设计规则（v7d）
 
-> 2026-11 v7d 设计轮定稿。本文是 tokens.dart（`packages/neolink_ui/lib/src/tokens.dart`）
+> 2026-11 v7d 设计轮定稿。本文是 tokens.dart（`packages/neolinker_ui/lib/src/tokens.dart`）
 > 之外唯一的规则真源：tokens 定义**值**，这里定义**怎么用**。两者冲突时以本文为准并回改 tokens。
 > `tool/gen_tokens.py` 已退役 —— tokens 手工维护，重新生成会覆盖本规则的取值。
 

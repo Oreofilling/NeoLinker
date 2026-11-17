@@ -1,4 +1,4 @@
-# NeoLink unattended verification loop (v7d+ automation tier).
+# NeoLinker unattended verification loop (v7d+ automation tier).
 #
 # Chains everything the box can run without a human:
 #   pub get -> plugin junction repair -> gen-l10n -> analyze x4 ->
@@ -31,7 +31,7 @@ $script:detectOut = ''
 
 # Detached runs (WMI/scheduled task launch) may lose their stdout pipe;
 # the transcript is the record that survives any launch weirdness.
-$transcript = Join-Path $env:TEMP 'neolink-verify.log'
+$transcript = Join-Path $env:TEMP 'neolinker-verify.log'
 Start-Transcript -Path $transcript -Append | Out-Null
 
 function Invoke-Step {
@@ -89,12 +89,12 @@ Invoke-Step 'plugin junctions' {
 
 Invoke-Step 'gen-l10n' { flutter gen-l10n }
 
-Invoke-Step 'analyze neolink_ui' { Set-Location "$repo\packages\neolink_ui"; dart analyze }
+Invoke-Step 'analyze neolinker_ui' { Set-Location "$repo\packages\neolinker_ui"; dart analyze }
 Invoke-Step 'analyze ble_universal' { Set-Location "$repo\packages\ble_universal"; dart analyze }
 Invoke-Step 'analyze provisioning_session' { Set-Location "$repo\packages\provisioning_session"; dart analyze }
 Invoke-Step 'analyze desktop_app' { Set-Location $app; dart analyze }
 
-Invoke-Step 'test neolink_ui' { Set-Location "$repo\packages\neolink_ui"; flutter test }
+Invoke-Step 'test neolinker_ui' { Set-Location "$repo\packages\neolinker_ui"; flutter test }
 # flutter test, NOT dart test: the VM platform has no dart:ui.
 Invoke-Step 'test ble_universal' { Set-Location "$repo\packages\ble_universal"; flutter test }
 Invoke-Step 'test provisioning_session' { Set-Location "$repo\packages\provisioning_session"; flutter test }

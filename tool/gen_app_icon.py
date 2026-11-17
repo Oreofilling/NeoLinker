@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""生成 NeoLink 应用图标与品牌 PNG（链·N，方向 A）。
+"""生成 NeoLinker 应用图标与品牌 PNG（链·N，方向 A）。
 
 产出：
 - apps/desktop_app/windows/runner/resources/app_icon.ico（16/24/32/48/64/256，
   ≤24px 自动用简化形：连续对角线 + 在线 accent 节点）
 - design/png/*.png（512：单墨 / accent / 主色砖；256：主色砖）
 
-几何空间 0..96，与 packages/neolink_ui/lib/src/widgets/nl_logo.dart 的画笔一致。
+几何空间 0..96，与 packages/neolinker_ui/lib/src/widgets/nl_logo.dart 的画笔一致。
 依赖 Pillow（pip install pillow）。
 """
 from pathlib import Path
@@ -80,10 +80,10 @@ def main():
         ICO, format="ICO", append_images=frames[:-1], sizes=[(s, s) for s in sizes]
     )
 
-    make_mark(512, INK_LIGHT, INK_LIGHT, False).save(PNG / "neolink-logo-512.png")
-    make_mark(512, INK_LIGHT, ACCENT_LIGHT, False).save(PNG / "neolink-logo-accent-512.png")
-    make_tile(512, False).save(PNG / "neolink-logo-tile-512.png")
-    make_tile(256, False).save(PNG / "neolink-logo-tile-256.png")
+    make_mark(512, INK_LIGHT, INK_LIGHT, False).save(PNG / "neolinker-logo-512.png")
+    make_mark(512, INK_LIGHT, ACCENT_LIGHT, False).save(PNG / "neolinker-logo-accent-512.png")
+    make_tile(512, False).save(PNG / "neolinker-logo-tile-512.png")
+    make_tile(256, False).save(PNG / "neolinker-logo-tile-256.png")
 
     got = Image.open(ICO).info.get("sizes")
     print(f"ico: {ICO.relative_to(ROOT)} sizes={sorted(got or [])}")

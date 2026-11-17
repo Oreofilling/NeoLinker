@@ -22,6 +22,6 @@ jobs:
       - name: upload windows build
         uses: actions/upload-artifact@v4
         with:
-          name: neolink-windows-x64
+          name: neolinker-windows-x64
           path: apps/desktop_app/build/windows/x64/runner/Release/
           if-no-files-found: warn

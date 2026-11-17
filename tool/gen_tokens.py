@@ -3,11 +3,11 @@
 Running this script would clobber the hand-tuned v7d token set — kept only
 for history. Source of truth: docs/design-rules.md + tokens.dart itself.
 
-Legacy description: 再生成 packages/neolink_ui/lib/src/tokens.dart。
+Legacy description: 再生成 packages/neolinker_ui/lib/src/tokens.dart。
 
 用法:
   python3 tool/gen_tokens.py [原型CSS路径] [输出dart路径]
-默认原型: lowpower_camera/docs/neolink_ui_mockup.html（NL 设计系统 OKLCH 令牌）。
+默认原型: lowpower_camera/docs/neolinker_ui_mockup.html（NL 设计系统 OKLCH 令牌）。
 亮/暗两套全量色彩 + 圆角 + 时长；行尾注释保留原始 OKLCH 表达式。
 """
 import math
@@ -15,8 +15,8 @@ import re
 import sys
 from pathlib import Path
 
-DEFAULT_CSS = "/home/work/lowpower_camera/docs/neolink_ui_mockup.html"
-DEFAULT_OUT = Path(__file__).resolve().parents[1] / "packages/neolink_ui/lib/src/tokens.dart"
+DEFAULT_CSS = "/home/work/lowpower_camera/docs/neolinker_ui_mockup.html"
+DEFAULT_OUT = Path(__file__).resolve().parents[1] / "packages/neolinker_ui/lib/src/tokens.dart"
 
 
 def oklch_to_argb(val: str):

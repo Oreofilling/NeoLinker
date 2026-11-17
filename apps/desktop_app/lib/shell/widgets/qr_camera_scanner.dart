@@ -24,7 +24,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_zxing/flutter_zxing.dart';
 import 'package:image/image.dart' as imglib;
-import 'package:neolink_ui/neolink_ui.dart';
+import 'package:neolinker_ui/neolinker_ui.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../provisioning/device_qr_uri.dart';

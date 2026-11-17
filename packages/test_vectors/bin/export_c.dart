@@ -46,7 +46,7 @@ void main(List<String> args) {
   }
 
   final out = StringBuffer('''
-// 由 neolink packages/test_vectors 的 bin/export_c.dart 生成 —— 请勿手改。
+// 由 neolinker packages/test_vectors 的 bin/export_c.dart 生成 —— 请勿手改。
 // 黄金向量是跨端单一事实来源（CT_PROV_PROTOCOL.md §15），修改请先改 Dart 侧再导出。
 #ifndef CT_PROV_VECTORS_H
 #define CT_PROV_VECTORS_H

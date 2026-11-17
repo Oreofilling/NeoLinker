@@ -1,6 +1,6 @@
 import 'package:discovery_domain/discovery_domain.dart';
 import 'package:flutter/material.dart';
-import 'package:neolink_ui/neolink_ui.dart';
+import 'package:neolinker_ui/neolinker_ui.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../l10n/channel_labels.dart';

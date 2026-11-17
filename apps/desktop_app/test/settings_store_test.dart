@@ -11,7 +11,7 @@ import 'package:desktop_app/services/settings_store.dart';
 
 void main() {
   Directory tempDir() {
-    final dir = Directory.systemTemp.createTempSync('neolink_settings_test');
+    final dir = Directory.systemTemp.createTempSync('neolinker_settings_test');
     addTearDown(() => dir.deleteSync(recursive: true));
     return dir;
   }

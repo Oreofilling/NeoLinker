@@ -1,7 +1,7 @@
 import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:neolink_ui/neolink_ui.dart';
+import 'package:neolinker_ui/neolinker_ui.dart';
 
 void main() {
   testWidgets('NLBadge/NLCard/NLButton 在亮暗主题下渲染', (tester) async {

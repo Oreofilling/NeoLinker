@@ -12,7 +12,7 @@ import 'package:ct_prov_core/ct_prov_core.dart' show ProvTransport;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:communication_domain/communication_domain.dart';
-import 'package:neolink_ui/neolink_ui.dart';
+import 'package:neolinker_ui/neolinker_ui.dart';
 import 'package:provisioning_session/provisioning_session.dart';
 
 import 'package:desktop_app/app.dart';
@@ -77,7 +77,7 @@ Future<void> pumpApp(
   addTearDown(tester.view.resetDevicePixelRatio);
   tester.platformDispatcher.localesTestValue = const [Locale('zh')];
   await tester.pumpWidget(
-    NeoLinkApp(
+    NeoLinkerApp(
       controller: controller,
       settings: settings ?? SettingsStore.none(),
       wifiSettingsOpener: wifiSettingsOpener,
@@ -1124,13 +1124,13 @@ void main() {
     addTearDown(source.close);
     addTearDown(device.close);
     addTearDown(controller.dispose);
-    final dir = Directory.systemTemp.createTempSync('neolink_settings_test');
+    final dir = Directory.systemTemp.createTempSync('neolinker_settings_test');
     addTearDown(() => dir.deleteSync(recursive: true));
 
     // 未存储任何设置：跟随系统英文（E5：不再硬编码中文）。
     tester.platformDispatcher.localesTestValue = const [Locale('en')];
     await tester.pumpWidget(
-      NeoLinkApp(controller: controller, settings: SettingsStore.none()),
+      NeoLinkerApp(controller: controller, settings: SettingsStore.none()),
     );
     await settle(tester);
     expect(find.text('Scan devices'), findsWidgets);
@@ -1153,7 +1153,7 @@ void main() {
     // 起始语言应为存储的中文（E5 的回归点）。
     File('${dir.path}\\settings.json').writeAsStringSync('{"locale":"zh"}\n');
     await tester.pumpWidget(
-      NeoLinkApp(
+      NeoLinkerApp(
         controller: controller,
         settings: SettingsStore(directory: dir.path),
       ),

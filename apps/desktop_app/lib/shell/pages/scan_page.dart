@@ -1,7 +1,7 @@
 import 'package:ap_discovery_adapter/ap_discovery_adapter.dart';
 import 'package:discovery_domain/discovery_domain.dart';
 import 'package:flutter/material.dart';
-import 'package:neolink_ui/neolink_ui.dart';
+import 'package:neolinker_ui/neolinker_ui.dart';
 import 'package:provisioning_session/provisioning_session.dart';
 
 import '../../l10n/app_localizations.dart';

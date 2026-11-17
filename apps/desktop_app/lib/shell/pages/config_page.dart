@@ -10,7 +10,7 @@ library;
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:neolink_ui/neolink_ui.dart';
+import 'package:neolinker_ui/neolinker_ui.dart';
 import 'package:provisioning_session/provisioning_session.dart';
 
 import '../../l10n/app_localizations.dart';

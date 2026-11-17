@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:neolink_ui/neolink_ui.dart';
+import 'package:neolinker_ui/neolinker_ui.dart';
 
 import 'l10n/app_localizations.dart';
 import 'provisioning/provisioning_controller.dart';
@@ -16,8 +16,8 @@ import 'shell/shell.dart';
 /// 语言默认跟随系统首选语言列表（E5：不硬编码中文）；用户在顶栏切换后
 /// 写入 %APPDATA% 持久化，重启保持。控制器默认自建（桌面真机依赖），
 /// 测试可注入替身与禁用的设置存储。
-class NeoLinkApp extends StatefulWidget {
-  const NeoLinkApp({
+class NeoLinkerApp extends StatefulWidget {
+  const NeoLinkerApp({
     super.key,
     this.controller,
     this.settings,
@@ -34,10 +34,10 @@ class NeoLinkApp extends StatefulWidget {
   final WifiSettingsOpener? wifiSettingsOpener;
 
   @override
-  State<NeoLinkApp> createState() => _NeoLinkAppState();
+  State<NeoLinkerApp> createState() => _NeoLinkerAppState();
 }
 
-class _NeoLinkAppState extends State<NeoLinkApp> {
+class _NeoLinkerAppState extends State<NeoLinkerApp> {
   ThemeMode _mode = ThemeMode.light;
   // null = 跟随系统首选语言列表（语言与主题均持久化，M2 注释承诺补齐）。
   Locale? _locale;
@@ -75,7 +75,7 @@ class _NeoLinkAppState extends State<NeoLinkApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      onGenerateTitle: (_) => 'NeoLink',
+      onGenerateTitle: (_) => 'NeoLinker',
       debugShowCheckedModeBanner: false,
       theme: nlTheme(Brightness.light),
       darkTheme: nlTheme(Brightness.dark),

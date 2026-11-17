@@ -26,7 +26,7 @@ String exportStamp(DateTime at) {
 /// shape that survives a paste into a ticket or a log.
 String formatReceiptText(SessionReceipt receipt, AppLocalizations l) {
   final buffer = StringBuffer()
-    ..writeln('NeoLink v$appVersion — ${l.exportReceiptTitle}')
+    ..writeln('NeoLinker v$appVersion — ${l.exportReceiptTitle}')
     ..writeln('${l.resultDeviceLabel}: ${receipt.deviceName}')
     ..writeln('${l.resultSerialLabel}: ${receipt.serialNumber}')
     ..writeln('${l.resultModelLabel}: ${receipt.model}')
@@ -41,7 +41,7 @@ String formatReceiptText(SessionReceipt receipt, AppLocalizations l) {
 /// history page lists).
 String formatHistoryText(List<SessionReceipt> receipts, AppLocalizations l) {
   final buffer = StringBuffer()
-    ..writeln('NeoLink v$appVersion — ${l.exportRunTitle}')
+    ..writeln('NeoLinker v$appVersion — ${l.exportRunTitle}')
     ..writeln('${l.exportGeneratedLabel}: ${exportStamp(DateTime.now())}')
     ..writeln();
   if (receipts.isEmpty) {

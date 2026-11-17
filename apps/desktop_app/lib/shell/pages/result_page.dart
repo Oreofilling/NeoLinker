@@ -9,7 +9,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:neolink_ui/neolink_ui.dart';
+import 'package:neolinker_ui/neolinker_ui.dart';
 import 'package:provisioning_session/provisioning_session.dart'
     hide ConfigSection;
 
@@ -62,7 +62,7 @@ class _ResultPageState extends State<ResultPage> {
     final receipt = controller.sessionHistory.lastOrNull;
     if (receipt == null) return;
     final saved = await exportTextFile(
-      'neolink-receipt-${receipt.serialNumber}.txt',
+      'neolinker-receipt-${receipt.serialNumber}.txt',
       formatReceiptText(receipt, l),
     );
     if (saved && mounted) _flash(_ResultFeedback.exported);

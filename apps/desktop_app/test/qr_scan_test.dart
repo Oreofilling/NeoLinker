@@ -7,7 +7,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:neolink_ui/neolink_ui.dart';
+import 'package:neolinker_ui/neolinker_ui.dart';
 
 import 'package:desktop_app/l10n/app_localizations.dart';
 import 'package:desktop_app/provisioning/provisioning_controller.dart';

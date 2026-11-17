@@ -23,10 +23,10 @@ void main() {
 
     tester.platformDispatcher.localesTestValue = const [Locale('zh')];
     await tester.pumpWidget(
-      NeoLinkApp(controller: controller, settings: SettingsStore.none()),
+      NeoLinkerApp(controller: controller, settings: SettingsStore.none()),
     );
     // v6 品牌行出现两处：侧栏 + 自检页卡片。
-    expect(find.text('NeoLink'), findsNWidgets(2));
+    expect(find.text('NeoLinker'), findsNWidgets(2));
     expect(find.text('环境自检'), findsWidgets);
     await tester.pump(); // 自检完成（阻塞态停留）
 

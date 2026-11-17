@@ -8,7 +8,7 @@ library;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:neolink_ui/neolink_ui.dart';
+import 'package:neolinker_ui/neolinker_ui.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../l10n/labels.dart';
@@ -38,7 +38,7 @@ class _HistoryPageState extends State<HistoryPage> {
 
   Future<void> _export(AppLocalizations l) async {
     final saved = await exportTextFile(
-      'neolink-history.txt',
+      'neolinker-history.txt',
       formatHistoryText(controller.sessionHistory, l),
     );
     if (!saved || !mounted) return;

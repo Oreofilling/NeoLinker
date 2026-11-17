@@ -1,6 +1,6 @@
 import 'package:discovery_domain/discovery_domain.dart';
 import 'package:flutter/material.dart';
-import 'package:neolink_ui/neolink_ui.dart';
+import 'package:neolinker_ui/neolinker_ui.dart';
 import 'package:provisioning_session/provisioning_session.dart';
 
 import '../app_metadata.dart';
@@ -186,7 +186,7 @@ class _AppShellState extends State<AppShell> {
                     NLLogo(size: 22),
                     SizedBox(width: 8),
                     Text(
-                      'NeoLink',
+                      'NeoLinker',
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
@@ -251,7 +251,7 @@ class _AppShellState extends State<AppShell> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'NeoLink v$appVersion',
+                'NeoLinker v$appVersion',
                 style: NLType.mono.copyWith(color: c.mutedForeground),
               ),
               const SizedBox(height: 5),

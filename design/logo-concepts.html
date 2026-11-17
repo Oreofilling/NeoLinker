@@ -1,4 +1,4 @@
-<title>NeoLink Logo</title>
+<title>NeoLinker Logo</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700;800&family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
@@ -175,7 +175,7 @@ h1 { font-size: 22px; font-weight: 800; letter-spacing: -0.01em; margin: 0; }
 <div class="wrap">
   <div class="top">
     <div>
-      <h1>NeoLink Logo — 三个方向</h1>
+      <h1>NeoLinker Logo — 三个方向</h1>
       <div class="sub">NL 设计系统 · M0 品牌标选型 · 点击卡片选中</div>
     </div>
     <button class="theme-toggle" id="themeBtn" type="button">切换亮/暗</button>
@@ -281,11 +281,11 @@ function render() {
       <div class="row-label">应用场景</div>
       <div class="scene">
         <div class="box">
-          <div class="stage"><div class="side-mock w"><div style="width:22px;height:22px">${c.mark(fg(), accent(), false)}</div><div><div class="t1">NeoLink</div><div class="t2">低功耗摄像头 · 配网与配置工具</div></div></div></div>
+          <div class="stage"><div class="side-mock w"><div style="width:22px;height:22px">${c.mark(fg(), accent(), false)}</div><div><div class="t1">NeoLinker</div><div class="t2">低功耗摄像头 · 配网与配置工具</div></div></div></div>
           <div class="cap">sidebar / 亮</div>
         </div>
         <div class="box">
-          <div class="stage dark"><div class="side-mock b"><div style="width:22px;height:22px">${c.mark(panelFg, accent(), false)}</div><div><div class="t1">NeoLink</div><div class="t2">低功耗摄像头 · 配网与配置工具</div></div></div></div>
+          <div class="stage dark"><div class="side-mock b"><div style="width:22px;height:22px">${c.mark(panelFg, accent(), false)}</div><div><div class="t1">NeoLinker</div><div class="t2">低功耗摄像头 · 配网与配置工具</div></div></div></div>
           <div class="cap">sidebar / 暗</div>
         </div>
         <div class="box">
@@ -293,14 +293,14 @@ function render() {
           <div class="cap">任务栏 44px 砖</div>
         </div>
         <div class="box">
-          <div class="stage"><div class="tab-mock"><div style="width:16px;height:16px">${c.mark(fg(), accent(), false)}</div>NeoLink</div></div>
+          <div class="stage"><div class="tab-mock"><div style="width:16px;height:16px">${c.mark(fg(), accent(), false)}</div>NeoLinker</div></div>
           <div class="cap">标签页 16px</div>
         </div>
       </div>
     </section>`).join("");
 
   let saved = null;
-  try { saved = localStorage.getItem("neolink-logo-choice"); } catch (e) { /* 私密模式等 */ }
+  try { saved = localStorage.getItem("neolinker-logo-choice"); } catch (e) { /* 私密模式等 */ }
   if (saved) applyChoice(saved, false);
 
   root.querySelectorAll(".concept").forEach((el) => {
@@ -318,7 +318,7 @@ function applyChoice(id, save) {
     el.setAttribute("aria-pressed", on ? "true" : "false");
     el.querySelector(".picked-chip").hidden = !on;
   });
-  if (save) { try { localStorage.setItem("neolink-logo-choice", id); } catch (e) { /* 同上 */ } }
+  if (save) { try { localStorage.setItem("neolinker-logo-choice", id); } catch (e) { /* 同上 */ } }
 }
 
 // 主题切换：显式设置 data-theme（同时覆盖系统偏好）

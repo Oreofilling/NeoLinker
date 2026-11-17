@@ -24,7 +24,7 @@ using winrt::Windows::Devices::Enumeration::DevicePairingKinds;
 using winrt::Windows::Devices::Enumeration::DevicePairingProtectionLevel;
 using winrt::Windows::Devices::Enumeration::DevicePairingResultStatus;
 
-constexpr char kPairingChannel[] = "neolink/windows_pairing";
+constexpr char kPairingChannel[] = "neolinker/windows_pairing";
 
 std::string DiagnosticLogPath() {
   char temporary_directory[MAX_PATH + 1] = {};
@@ -32,9 +32,9 @@ std::string DiagnosticLogPath() {
       GetTempPathA(static_cast<DWORD>(sizeof(temporary_directory)),
                    temporary_directory);
   if (length == 0 || length >= sizeof(temporary_directory)) {
-    return "neolink_desktop.log";
+    return "neolinker_desktop.log";
   }
-  return std::string(temporary_directory, length) + "neolink_desktop.log";
+  return std::string(temporary_directory, length) + "neolinker_desktop.log";
 }
 
 void AppendDiagnosticLog(const std::string& line) {

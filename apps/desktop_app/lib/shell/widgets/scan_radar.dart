@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:neolink_ui/neolink_ui.dart';
+import 'package:neolinker_ui/neolinker_ui.dart';
 
 /// Scanning visual (v6): a rotating radar sweep whose beam lights up static
 /// blips as it passes them — a nod to what the page actually does (listen on

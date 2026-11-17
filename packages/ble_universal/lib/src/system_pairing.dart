@@ -1,7 +1,7 @@
 /// 系统配对编排（§4.4 桌面流）：在打开 GATT 通道之前建立 OS 侧 bond。
 ///
 /// Windows 走宿主 runner（example / desktop_app）实现的原生配对通道
-/// `neolink/windows_pairing`——CustomPairAsync(ConfirmOnly, Encryption)
+/// `neolinker/windows_pairing`——CustomPairAsync(ConfirmOnly, Encryption)
 /// 保留完整 DevicePairingResultStatus，并避开 universal_ble pair() 失败
 /// 掀掉插件连接注册表的路径；通道缺失时回退 UniversalBle.pair。无系统
 /// 配对 API 的平台交给设备侧 CONNECT 即发的 SMP 安全请求兜底。
@@ -18,7 +18,7 @@ import 'package:universal_ble/universal_ble.dart';
 /// C++ 侧实现两个方法：`pair`（参数为设备 ID 字符串，返回状态名）与
 /// `log`（诊断转录，写入 %TEMP% 日志文件）。
 const MethodChannel kWindowsPairingChannel = MethodChannel(
-  'neolink/windows_pairing',
+  'neolinker/windows_pairing',
 );
 
 /// 原生系统配对失败。

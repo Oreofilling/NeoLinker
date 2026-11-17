@@ -1,4 +1,4 @@
-# NeoLink 仓库约束
+# NeoLinker 仓库约束
 
 ## 语言（C-L1）
 

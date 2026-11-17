@@ -1,7 +1,7 @@
 # M3 验收报告：配置表单与下发
 
 - 日期：2026-11-03
-- 基线：neolink `9a0cc95`（依赖 `653e07f` close 修复、`737e2f0` transport 修复）
+- 基线：neolinker `9a0cc95`（依赖 `653e07f` close 修复、`737e2f0` transport 修复）
 - 验证环境：Windows 编译机（192.168.93.9），`val_m25` 流水线（pub get + gen-l10n + analyze + test）
 - 结果：**analyze 零问题，40/40 测试通过**（见「验证记录」）
 - 依据：NEOLINK_WINDOWS_DEV_PLAN §M3；NEOLINK_TECH_SELECTION §13.3 / §13.4

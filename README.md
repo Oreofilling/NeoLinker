@@ -1,4 +1,4 @@
-# NeoLink
+# NeoLinker
 
 设备扫描与通讯配置工具（无设备库）。Windows 10/11 桌面端为 P0 首发平台。
 
@@ -9,10 +9,10 @@
 ## 结构（M0）
 
 ```text
-neolink/
+neolinker/
 ├── apps/desktop_app/        # Windows 入口（参考实现）
 ├── packages/
-│   ├── neolink_ui/          # NL 设计系统（OKLCH 令牌 + 基础组件）
+│   ├── neolinker_ui/          # NL 设计系统（OKLCH 令牌 + 基础组件）
 │   ├── ct_prov_core/        # CT-Prov/1 编解码、分片、错误码（M1 填充）
 │   ├── discovery_domain/    # 三路发现归一化（M2 填充）
 │   ├── provisioning_session/# 配置会话状态机（M2 填充）
@@ -28,7 +28,7 @@ neolink/
 
 - 方案：Flutter 官方 `gen-l10n`（ARB 文件 + 代码生成），zh 为模板语言，en 第二语言。
 - 文案位置：`apps/desktop_app/lib/l10n/app_*.arb`；查表扩展 `lib/l10n/labels.dart`。
-- 规则：**neolink_ui 组件不硬编码文案**（label 一律由应用层传入并本地化）；新增语言 = 新增一个 ARB 文件。
+- 规则：**neolinker_ui 组件不硬编码文案**（label 一律由应用层传入并本地化）；新增语言 = 新增一个 ARB 文件。
 - 语言与主题同为工具设置项（允许持久化，M2 接入）。
 - `windows/` runner 已入库（自定义 `app_icon.ico`），CI 不再引导生成。
 - 本地改词后跑 `flutter gen-l10n`（apps/desktop_app，产出 `lib/l10n/app_localizations*.dart`，已 gitignore；CI 自动执行）。
@@ -44,7 +44,7 @@ cd apps/desktop_app && flutter run -d windows
 
 ## 设计令牌
 
-`packages/neolink_ui/lib/src/tokens.dart` 由 `tool/gen_tokens.py` 从原型
+`packages/neolinker_ui/lib/src/tokens.dart` 由 `tool/gen_tokens.py` 从原型
 （NL 设计系统）的 OKLCH 令牌生成，亮/暗两套，经 `ThemeExtension` 注册；
 Widget 内用 `context.nl.background` 等访问。修改设计时改原型后重新生成，勿手改。
 
@@ -56,13 +56,13 @@ Widget 内用 `context.nl.background` 等访问。修改设计时改原型后重
 - App 图标与 PNG 由 `tool/gen_app_icon.py` 生成：
   `apps/desktop_app/windows/runner/resources/app_icon.ico`（16–256，
   ≤24px 用简化形：连续对角线）与 `design/png/` 多尺寸导出。
-- UI 内一律用 `NLLogo` 组件（neolink_ui），不贴图；改几何时同步
+- UI 内一律用 `NLLogo` 组件（neolinker_ui），不贴图；改几何时同步
   母版 / 组件 / 生成脚本三处（同为 0..96 坐标空间）。
 
 ## M0 状态
 
 - [x] monorepo 结构（apps + packages，path 依赖）
-- [x] neolink_ui：OKLCH 令牌 / 卡片 / 按钮 / 徽章 / 骨架屏 / 下划线 tabs / 亮暗主题
+- [x] neolinker_ui：OKLCH 令牌 / 卡片 / 按钮 / 徽章 / 骨架屏 / 下划线 tabs / 亮暗主题
 - [x] desktop_app 空壳：侧栏导航 + 顶栏主题/语言切换 + 页面占位
 - [x] 中英双语：gen-l10n + ARB（zh 模板），文案全走 AppLocalizations
 - [x] 品牌标：链·N 母版 + NLLogo 组件（侧栏已接） + app 图标

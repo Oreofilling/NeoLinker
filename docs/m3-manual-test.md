@@ -1,6 +1,6 @@
 # M3 手工测试用例（desktop_app）
 
-- 适用版本：`desktop_app_m3d.zip`（neolink main M3d 修复批）
+- 适用版本：`desktop_app_m3d.zip`（neolinker main M3d 修复批）
 - 日期：2026-11-03（M3d 第四轮：重检可见反馈与超时兜底。
   此前 M3c 第三轮：A1 倒计时醒目化、A2 自检页侧栏可达；
   M3b 第二轮：A1 倒计时、A2 任意相位重检、B/C 时效标注、E5 跟随系统）
@@ -137,9 +137,9 @@ none/pap/chap/pap_or_chap。
 **E2 侧栏导航门禁**：流程/配置/下发分组；当前阶段页高亮；未解锁页不可点；
 扫描阶段「配置节/下发确认/下发结果」锁定。真机因能力读取被拒，这三页始终锁定——预期。
 **E3 顶栏徽章**：启动「未连接」；连接建立（GATT 起）变「已连接」；回到错误卡/列表后「未连接」。
-**E4 窗口**：标题「NeoLink」，任务栏图标为 logo。
+**E4 窗口**：标题「NeoLinker」，任务栏图标为 logo。
 **E5 语言跟随系统并持久化（M3b 修复点）**
 - 默认跟随系统语言：中文系统显示中文；系统切英文后（重新）启动 app 显示英文。
 - 右上角手动切换（中文 ⇄ English）即时生效，并写入
-  `%APPDATA%\NeoLink\settings.json`；再次启动 app 保持手动选择的语言
+  `%APPDATA%\NeoLinker\settings.json`；再次启动 app 保持手动选择的语言
   （手动选择优先于系统语言）。

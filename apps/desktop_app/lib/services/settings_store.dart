@@ -17,7 +17,7 @@ final class AppSettings {
   };
 }
 
-/// Tiny JSON settings file under %APPDATA%/NeoLink. Deliberately dependency
+/// Tiny JSON settings file under %APPDATA%/NeoLinker. Deliberately dependency
 /// free: desktop-only, one small file, every failure degrades to "no stored
 /// settings" instead of blocking startup.
 final class SettingsStore {
@@ -29,7 +29,7 @@ final class SettingsStore {
 
   static String? _defaultDirectory() {
     final appData = Platform.environment['APPDATA'];
-    return appData == null ? null : '$appData\\NeoLink';
+    return appData == null ? null : '$appData\\NeoLinker';
   }
 
   final String? _directory;

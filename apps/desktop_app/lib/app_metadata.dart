@@ -2,4 +2,4 @@
 /// as the Windows version resource. Keep in sync with pubspec.yaml
 /// `version:` and windows/runner/Runner.rc — three places, one number.
 const String appVersion = '0.2.0';
-const String appProductName = 'NeoLink Device Provisioning';
+const String appProductName = 'NeoLinker Device Provisioning';

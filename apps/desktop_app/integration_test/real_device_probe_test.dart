@@ -28,7 +28,7 @@ import 'package:communication_domain/communication_domain.dart';
 import 'package:desktop_app/provisioning/provisioning_controller.dart';
 import 'package:desktop_app/provisioning/section_editing.dart';
 
-const _probeSsid = 'neolink-probe';
+const _probeSsid = 'neolinker-probe';
 
 Future<bool> _waitFor(
   bool Function() condition,

@@ -41,7 +41,7 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
     return tester.pumpWidget(
-      NeoLinkApp(controller: controller, settings: SettingsStore.none()),
+      NeoLinkerApp(controller: controller, settings: SettingsStore.none()),
     );
   }
 

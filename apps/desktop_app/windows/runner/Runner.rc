@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "camthink-ai" "\0"
-            VALUE "FileDescription", "NeoLink Device Provisioning" "\0"
+            VALUE "FileDescription", "NeoLinker Device Provisioning" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "NeoLink" "\0"
+            VALUE "InternalName", "NeoLinker" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 camthink-ai" "\0"
-            VALUE "OriginalFilename", "NeoLink.exe" "\0"
-            VALUE "ProductName", "NeoLink Device Provisioning" "\0"
+            VALUE "OriginalFilename", "NeoLinker.exe" "\0"
+            VALUE "ProductName", "NeoLinker Device Provisioning" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
