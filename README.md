@@ -121,10 +121,19 @@ neolinker/
   the in-app mark is the `NLLogo` widget; icons are regenerated with
   `tool/gen_app_icon.py`. Keep the three in sync when geometry changes.
 
+## Documentation
+
+The wire protocols this app implements are published in [`docs/`](docs/):
+
+- [CT-Prov/1 — Communication Provisioning Protocol](docs/ct-prov-protocol.md)
+  (BLE GATT + softAP HTTP bindings)
+- [CT-Prov/1 — Configuration Schema](docs/ct-config-schema.md)
+  (fields of every `config.set` section)
+- [CT-Disc — Device Discovery & Management Protocol](docs/ct-disc-protocol.md)
+  (UDP multicast + MQTT)
+
 ## Roadmap
 
-- English protocol specifications (CT-Prov/1, CT-Disc) will be published in
-  `docs/`.
 - NE503 management leg is maturing (LAN API transport, embedded console).
 
 ## Contributing

@@ -89,6 +89,14 @@ neolinker/
 └── tool/                      # CI 入口、设计令牌与应用图标生成脚本
 ```
 
+## 文档
+
+本应用实现的线上协议规范发布在 [`docs/`](docs/)（英文）：
+
+- [CT-Prov/1 通讯配置协议](docs/ct-prov-protocol.md)（BLE GATT + softAP HTTP 绑定）
+- [CT-Prov/1 配置模式](docs/ct-config-schema.md)（`config.set` 各配置节字段）
+- [CT-Disc 设备发现与管理协议](docs/ct-disc-protocol.md)（UDP 组播 + MQTT）
+
 ## 工程注记（中文维护者向）
 
 ### 中英双语（i18n）
