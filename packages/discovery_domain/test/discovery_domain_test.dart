@@ -150,6 +150,109 @@ void main() {
     });
   });
 
+  group('per-channel TTL sweep (CT-Disc v1.2.0 §5)', () {
+    DiscoveryCandidate candidate(
+      Set<DiscoveryChannel> channels, {
+      Map<DiscoveryChannel, DateTime>? lastSeenByChannel,
+      DateTime? lastSeen,
+    }) =>
+        DiscoveryCandidate(
+          candidateId: 'dev-1',
+          macSuffix: 'A1B2C3',
+          channels: channels,
+          provisionable: true,
+          busy: false,
+          lastSeen: lastSeen ?? t0,
+          lastSeenByChannel: lastSeenByChannel ?? const {},
+        );
+
+    test('merged row survives while any channel leg is within its own TTL',
+        () {
+      final registry = DiscoveryRegistry();
+      // Both legs seen at t0. BLE TTL 12 s, CT-Disc TTL 30 s.
+      registry.absorb(candidate(
+        const {DiscoveryChannel.ble},
+        lastSeenByChannel: {DiscoveryChannel.ble: t0},
+      ));
+      registry.absorb(candidate(
+        const {DiscoveryChannel.ctDisc},
+        lastSeenByChannel: {DiscoveryChannel.ctDisc: t0},
+      ));
+
+      // At t0+20s the BLE leg expired but CT-Disc is still fresh: the
+      // row must stay (a global 12 s sweep would have dropped it).
+      final removed = registry.sweepExpired(
+        t0.add(const Duration(seconds: 20)),
+        ttlByChannel: const {
+          DiscoveryChannel.ctDisc: Duration(seconds: 30),
+        },
+      );
+
+      expect(removed, isEmpty);
+      expect(registry.snapshot, hasLength(1));
+      // The merge keeps per-channel liveness, not just the overall max.
+      expect(
+        registry.snapshot.single.lastSeenByChannel.keys,
+        const {DiscoveryChannel.ble, DiscoveryChannel.ctDisc},
+      );
+    });
+
+    test('row expires only after every channel leg is past its TTL', () {
+      final registry = DiscoveryRegistry();
+      registry.absorb(candidate(
+        const {DiscoveryChannel.ctDisc},
+        lastSeenByChannel: {DiscoveryChannel.ctDisc: t0},
+      ));
+
+      final removed = registry.sweepExpired(
+        t0.add(const Duration(seconds: 31)),
+        ttlByChannel: const {
+          DiscoveryChannel.ctDisc: Duration(seconds: 30),
+        },
+      );
+
+      expect(removed.map((c) => c.macSuffix), ['A1B2C3']);
+      expect(registry.snapshot, isEmpty);
+    });
+
+    test('merge takes the newer timestamp per channel', () {
+      final registry = DiscoveryRegistry();
+      registry.absorb(candidate(
+        const {DiscoveryChannel.ctDisc},
+        lastSeenByChannel: {DiscoveryChannel.ctDisc: t0},
+      ));
+      registry.absorb(candidate(
+        const {DiscoveryChannel.ctDisc},
+        lastSeenByChannel: {
+          DiscoveryChannel.ctDisc: t0.add(const Duration(seconds: 5)),
+        },
+      ));
+
+      expect(
+        registry.snapshot.single.lastSeenByChannel[DiscoveryChannel.ctDisc],
+        t0.add(const Duration(seconds: 5)),
+      );
+    });
+
+    test('empty per-channel map keeps the legacy single-TTL behavior', () {
+      final registry = DiscoveryRegistry();
+      // Old sources (BLE/AP) build candidates without the map; a channel
+      // override must not leak onto them — they keep expiring on the
+      // default ttl against the overall lastSeen.
+      registry.absorb(bleCandidate('A1B2C3', lastSeen: t0));
+
+      final removed = registry.sweepExpired(
+        t0.add(const Duration(seconds: 20)),
+        ttlByChannel: const {
+          DiscoveryChannel.ctDisc: Duration(seconds: 30),
+        },
+      );
+
+      expect(removed.map((c) => c.macSuffix), ['A1B2C3']);
+      expect(registry.snapshot, isEmpty);
+    });
+  });
+
   group('环境自检汇总', () {
     ChannelReadiness readiness(
       DiscoveryChannel channel,

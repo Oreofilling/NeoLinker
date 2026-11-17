@@ -1215,12 +1215,29 @@ class ProvisioningController extends ChangeNotifier {
     _sweepTimer = Timer.periodic(sweepInterval, (_) {
       if (_machine.phase == SessionPhase.scanning) {
         // 候选超时刷新：超过 ttl 未再见到即移除（设备仍在广播会重新入表）。
-        if (_registry.sweepExpired(DateTime.now(), ttl: ttl).isNotEmpty) {
+        // CT-Disc legs carry their own liveness map and hold 30 s
+        // (kCtDiscChannelTimeout, v1.2.0 §5); the default ttl still
+        // governs rows without per-channel timestamps.
+        if (_registry
+            .sweepExpired(
+              DateTime.now(),
+              ttl: ttl,
+              ttlByChannel: const {
+                DiscoveryChannel.ctDisc: kCtDiscChannelTimeout,
+              },
+            )
+            .isNotEmpty) {
           notifyListeners();
         }
       } else if (_machine.phase == SessionPhase.resultsAvailable) {
-        // 连续扫描：结果期同样按 ttl 淘汰；全部淘汰后重开扫描窗口。
-        _registry.sweepExpired(DateTime.now(), ttl: ttl);
+        // 连续扫描：结果期同样按通道 ttl 淘汰；全部淘汰后重开扫描窗口。
+        _registry.sweepExpired(
+          DateTime.now(),
+          ttl: ttl,
+          ttlByChannel: const {
+            DiscoveryChannel.ctDisc: kCtDiscChannelTimeout,
+          },
+        );
         if (_registry.snapshot.isEmpty) {
           unawaited(rescan());
           return;
@@ -1265,12 +1282,31 @@ class ProvisioningController extends ChangeNotifier {
   Future<void> _startSourceGuarded() async {
     try {
       await _source.start();
+      // Each scan window re-solicits probe-capable channels: CT-Disc
+      // devices answer ct-probe with an immediate announce (v1.2.0 §3.3)
+      // instead of waiting out their 5 s beacon. The very first scan
+      // fires twice (source start + here) — one extra 18-byte datagram,
+      // merged away by the registry.
+      await _fireProbeCapableSources();
     } catch (error) {
       if (_machine.phase == SessionPhase.scanning) {
         _stopScanTasks();
         _machine.reportProblem('source_start_failed', '$error');
         _machine.reportScanTimeout();
         notifyListeners();
+      }
+    }
+  }
+
+  /// Fans the solicitation out to probe-capable children of whatever
+  /// source tree is wired (plain source or composite).
+  Future<void> _fireProbeCapableSources() async {
+    DiscoverySource root = _source;
+    final sources =
+        root is CompositeDiscoverySource ? root.sources : [root];
+    for (final source in sources) {
+      if (source is ProbeCapableDiscoverySource) {
+        await source.sendProbe();
       }
     }
   }

@@ -1,17 +1,21 @@
 /// CT-Disc discovery source: joins the announcement multicast group on
-/// the allowed NICs and turns ct-announce datagrams into candidates
-/// (product flow 5.3, NE301 ct_discover v1.0.0).
+/// the allowed NICs, turns ct-announce datagrams into candidates
+/// (product flow 5.3), and solicits with ct-probe (CT_DISC_PROTOCOL
+/// v1.2.0 §3.3).
 ///
-/// NE301's protocol is announce-only (a device beacon every 5 s; there is
-/// no solicit to send), so the "broadcast" half of the plan's
-/// broadcast/controlled-unicast wording reduces to joining and listening
-/// for now. The candidate id encodes the receiving interface so a device
-/// answering on two subnets stays visible on both (5.3: same response on
-/// different NICs is displayed separately); the registry still merges by
-/// MAC suffix across channels.
+/// Announces beacon every 5 s on their own; the ct-probe solicitation
+/// makes a device answer immediately instead of waiting for its next
+/// beacon, which is what keeps a fresh scan short. NE503's device side
+/// does not answer probes yet (its listener only handles ct-announce
+/// and ct-set-network), so the send is forward-compatible rather than
+/// load-bearing today. The candidate id encodes the receiving interface
+/// so a device answering on two subnets stays visible on both (5.3:
+/// same response on different NICs is displayed separately); the
+/// registry still merges by MAC suffix across channels.
 library;
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -46,6 +50,58 @@ const int kIpAddMembershipLinux = 35;
 int ipAddMembershipFor(String operatingSystem) =>
     operatingSystem == 'linux' ? kIpAddMembershipLinux : kIpAddMembershipBsd;
 
+/// Client solicitation payload (CT-Disc v1.2.0 §3.3): a device that
+/// receives it answers with an immediate ct-announce instead of
+/// waiting for its next beacon interval.
+const String kCtProbePayload = '{"type":"ct-probe"}';
+
+/// IP_MULTICAST_IF option number (in_addr payload). Unlike membership
+/// numbering this value is 2 on Linux, Windows and macOS alike.
+const int kIpMulticastIfOption = 2;
+
+/// Channel liveness timeout (CT-Disc v1.2.0 §5): a discovered row stays
+/// listed this long after the last ct-announce on its ct-disc leg.
+const Duration kCtDiscChannelTimeout = Duration(seconds: 30);
+
+/// Sends one ct-probe per joined NIC, pinning the multicast egress
+/// interface before each send — without IP_MULTICAST_IF every probe
+/// would leave through the default route and subnets behind the other
+/// NICs would never hear the solicitation. A NIC that refuses the
+/// option or the send is skipped, not fatal for the rest.
+Future<void> sendCtProbe(
+  RawDatagramSocket socket,
+  List<NicEndpoint> joinedInterfaces,
+) async {
+  final group = InternetAddress(kCtDiscMulticastGroup);
+  final payload = Uint8List.fromList(utf8.encode(kCtProbePayload));
+  final sent = <String>{};
+  for (final nic in joinedInterfaces) {
+    if (!sent.add(nic.interfaceName)) continue; // one send per interface
+    try {
+      socket.setRawOption(RawSocketOption(
+        kIpProtoIpLevel,
+        kIpMulticastIfOption,
+        Uint8List.fromList(nic.address.rawAddress.take(4).toList()),
+      ));
+      socket.send(payload, group, kCtDiscPort);
+    } catch (_) {
+      // One unsendable NIC must not abort the sweep across the rest.
+    }
+  }
+}
+
+/// Sources whose channel supports active solicitation implement this;
+/// the scan loop re-fires the solicitation at every scan start. It is a
+/// subtype of [DiscoverySource] (a solicitable source is a discovery
+/// source), which also keeps Dart's `is` promotion working at fan-out
+/// call sites.
+abstract interface class ProbeCapableDiscoverySource
+    implements DiscoverySource {
+  /// Re-sends the channel solicitation on a live channel; no-op while
+  /// the channel is stopped.
+  Future<void> sendProbe();
+}
+
 /// Normalizes one observation into a candidate.
 ///
 /// The announce carries no busy flag, so busy=false / provisionable=true
@@ -55,6 +111,7 @@ DiscoveryCandidate ctDiscCandidateFromObservation(
   required String interfaceName,
   DateTime Function()? now,
 }) {
+  final seen = (now ?? DateTime.now)();
   return DiscoveryCandidate(
     candidateId: 'ctdisc:${observation.macSuffix}@$interfaceName',
     macSuffix: observation.macSuffix,
@@ -62,19 +119,28 @@ DiscoveryCandidate ctDiscCandidateFromObservation(
     channels: const {DiscoveryChannel.ctDisc},
     provisionable: true,
     busy: false,
-    lastSeen: (now ?? DateTime.now)(),
+    lastSeen: seen,
+    // Feeds the per-channel TTL sweep: this leg stays listed for
+    // kCtDiscChannelTimeout even while the faster channels expire.
+    lastSeenByChannel: {DiscoveryChannel.ctDisc: seen},
   );
 }
 
 /// Multicast listener source.
-final class CtDiscDiscoverySource implements DiscoverySource {
+final class CtDiscDiscoverySource
+    implements DiscoverySource, ProbeCapableDiscoverySource {
   CtDiscDiscoverySource({
     Future<List<NicEndpoint>> Function({bool includeVirtual})? nicEnumerator,
     Future<RawDatagramSocket> Function(List<String> nicNames)? socketFactory,
+    Future<void> Function(
+      RawDatagramSocket socket,
+      List<NicEndpoint> joinedNics,
+    )? probeSender,
     bool includeVirtualNics = false,
     DateTime Function()? now,
   })  : _nicEnumerator = nicEnumerator ?? enumerateNicEndpoints,
         _socketFactory = socketFactory,
+        _probeSender = probeSender,
         _includeVirtual = includeVirtualNics,
         _now = now;
 
@@ -82,6 +148,10 @@ final class CtDiscDiscoverySource implements DiscoverySource {
       _nicEnumerator;
   final Future<RawDatagramSocket> Function(List<String> nicNames)?
       _socketFactory;
+  final Future<void> Function(
+    RawDatagramSocket socket,
+    List<NicEndpoint> joinedNics,
+  )? _probeSender;
   final bool _includeVirtual;
   final DateTime Function()? _now;
 
@@ -130,6 +200,14 @@ final class CtDiscDiscoverySource implements DiscoverySource {
           ),
         );
       });
+      // Solicit once per fresh start (§3.3): devices answer with an
+      // immediate announce instead of waiting out their beacon interval.
+      // Isolated so a refusing socket never tears down the listener.
+      try {
+        await (_probeSender ?? sendCtProbe)(socket, joinedNics);
+      } catch (_) {
+        // Probe is an accelerator, never a precondition.
+      }
     } catch (_) {
       // Bind failures (no NIC, sockets unavailable) leave the channel
       // silent; capability UI comes from the environment probe.
@@ -149,6 +227,17 @@ final class CtDiscDiscoverySource implements DiscoverySource {
     _socket = null;
     joinedNics = const <NicEndpoint>[];
     _attributionNics = const <NicEndpoint>[];
+  }
+
+  @override
+  Future<void> sendProbe() async {
+    final socket = _socket;
+    if (socket == null) return; // channel down: silent no-op
+    try {
+      await (_probeSender ?? sendCtProbe)(socket, joinedNics);
+    } catch (_) {
+      // Same posture as the start-time probe: never fatal.
+    }
   }
 
   /// Binds once and joins the group through every selected NIC.

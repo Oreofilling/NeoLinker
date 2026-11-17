@@ -1087,6 +1087,37 @@ void main() {
     );
   });
 
+  group('ct-probe solicitation (CT-Disc v1.2.0 §3.3)', () {
+    test('each scan window re-fires the channel probe', () async {
+      final source = ProbingFakeSource();
+      final controller = makeController(source);
+      addTearDown(controller.dispose);
+      addTearDown(source.close);
+
+      await controller.runSelfCheck();
+      await until(
+        () => source.startCount == 1,
+        'selfcheck did not start scan',
+      );
+      // First window: the solicitation rides up with the source.
+      await until(() => source.probeCount == 1, 'scan window did not probe');
+
+      // Land in results, then rescan: the fresh window re-solicits even
+      // though start() is idempotent by now (source never stopped).
+      source.emit(sampleCandidate());
+      await until(
+        () => controller.phase == SessionPhase.resultsAvailable,
+        'candidate did not move phase',
+      );
+      await controller.rescan();
+      await until(
+        () => source.startCount == 2,
+        'rescan did not restart the scan source',
+      );
+      await until(() => source.probeCount == 2, 'rescan did not re-probe');
+    });
+  });
+
   group('M5 three-channel scan', () {
     test(
       'AP-only rows join the softAP chain; CT-Disc-only rows fail stable',

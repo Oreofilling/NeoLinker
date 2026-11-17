@@ -1,9 +1,10 @@
-/// ct-announce payload parsing (NE301 ct_discover v1.0.0 wire format).
+/// ct-announce payload parsing (CT_DISC_PROTOCOL v1.2.0 wire format).
 ///
 /// Devices announce every 5 s on multicast 239.255.255.250:19850:
 /// `{"type":"ct-announce","product","sn","mac","ip","fw","port","hw",
-/// "caps":[...]}` — max 512 bytes. Only fields the discovery layer needs
-/// are validated (type, mac); the rest pass through best-effort.
+/// "caps":[...]}` — max 1024 bytes (§2). Only fields the discovery
+/// layer needs are validated (type, mac); the rest pass through
+/// best-effort.
 library;
 
 import 'dart:convert';

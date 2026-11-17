@@ -41,6 +41,19 @@ final class FakeSource implements DiscoverySource {
   Future<void> close() => _controller.close();
 }
 
+/// FakeSource with the ct-probe solicitation seam: records sendProbe
+/// calls (every scan window re-fires the solicitation, CT-Disc v1.2.0
+/// §3.3, while start() stays idempotent across windows).
+final class ProbingFakeSource extends FakeSource
+    implements ProbeCapableDiscoverySource {
+  int probeCount = 0;
+
+  @override
+  Future<void> sendProbe() async {
+    probeCount++;
+  }
+}
+
 /// Fake firmware-side device: reassembles C2D frames and answers
 /// device.info.get / communication.capabilities.get / config.set /
 /// communication.scan / config.get; other ops answer UNSUPPORTED_OPERATION

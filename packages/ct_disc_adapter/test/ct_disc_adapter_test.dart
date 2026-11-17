@@ -112,6 +112,105 @@ void main() {
       expect(candidate.channels, const {DiscoveryChannel.ctDisc});
       expect(candidate.provisionable, isTrue);
       expect(candidate.busy, isFalse);
+      // Per-channel liveness feeds the registry's per-channel TTL sweep.
+      expect(
+        candidate.lastSeenByChannel,
+        {
+          DiscoveryChannel.ctDisc: DateTime(2026, 11, 5, 23, 30),
+        },
+      );
+    });
+  });
+
+  group('ct-probe solicitation (v1.2.0 §3.3)', () {
+    test('probe payload is the spec wire format', () {
+      // jsonDecode pins the exact bytes a device must recognize; any
+      // reformatting of the constant shows up here first.
+      expect(jsonDecode(kCtProbePayload), {'type': 'ct-probe'});
+    });
+
+    test(
+        'start fires one probe through the joined NICs; idempotent start does not refire',
+        () async {
+      final loopbackSocket = await RawDatagramSocket.bind(
+        InternetAddress.loopbackIPv4,
+        0,
+      );
+      final probeCalls = <(RawDatagramSocket, List<NicEndpoint>)>[];
+      final source = CtDiscDiscoverySource(
+        nicEnumerator: ({bool includeVirtual = false}) async => [
+          NicEndpoint(
+            interfaceName: 'lo0',
+            address: InternetAddress.loopbackIPv4,
+            nicClass: NicClass.physical,
+          ),
+        ],
+        socketFactory: (names) async => loopbackSocket,
+        probeSender: (socket, nics) async => probeCalls.add((socket, nics)),
+      );
+      await source.start();
+      await source.start(); // second start is a no-op: no second probe
+
+      expect(probeCalls, hasLength(1));
+      expect(probeCalls.single.$1, same(loopbackSocket));
+      expect(probeCalls.single.$2.single.interfaceName, 'lo0');
+
+      await source.stop();
+      await source.sendProbe(); // stopped channel: silent no-op
+      expect(probeCalls, hasLength(1));
+    });
+
+    test('sendProbe refires on a live channel for later scans', () async {
+      final loopbackSocket = await RawDatagramSocket.bind(
+        InternetAddress.loopbackIPv4,
+        0,
+      );
+      var probeCount = 0;
+      final source = CtDiscDiscoverySource(
+        nicEnumerator: ({bool includeVirtual = false}) async => [],
+        socketFactory: (names) async => loopbackSocket,
+        probeSender: (socket, nics) async => probeCount++,
+      );
+      await source.start(); // scan 1: probe rides the start transition
+      await source.sendProbe(); // scan 2+: the scan loop re-fires it
+
+      expect(probeCount, 2);
+
+      await source.stop();
+    });
+
+    test('a throwing probe sender never takes the listener down', () async {
+      final loopbackSocket = await RawDatagramSocket.bind(
+        InternetAddress.loopbackIPv4,
+        0,
+      );
+      final source = CtDiscDiscoverySource(
+        nicEnumerator: ({bool includeVirtual = false}) async => [],
+        socketFactory: (names) async => loopbackSocket,
+        probeSender: (socket, nics) async {
+          throw const SocketException('multicast egress refused');
+        },
+      );
+      final received = <DiscoveryCandidate>[];
+      final gotOne = Completer<void>();
+      final sub = source.candidates.listen((candidate) {
+        received.add(candidate);
+        if (!gotOne.isCompleted) gotOne.complete();
+      });
+      await source.start(); // probe throws; channel must stay alive
+
+      final sender = await RawDatagramSocket.bind(
+        InternetAddress.loopbackIPv4,
+        0,
+      );
+      sender.send(utf8.encode(_announce), InternetAddress.loopbackIPv4,
+          loopbackSocket.port);
+      await gotOne.future.timeout(const Duration(seconds: 5));
+      await source.stop();
+      await sub.cancel();
+      sender.close();
+
+      expect(received.single.macSuffix, '84C102');
     });
   });
 

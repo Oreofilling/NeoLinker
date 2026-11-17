@@ -68,6 +68,7 @@ final class DiscoveryCandidate {
     required this.provisionable,
     required this.busy,
     required this.lastSeen,
+    this.lastSeenByChannel = const {},
     this.macSuffix,
     this.modelHint,
     this.signal,
@@ -94,6 +95,13 @@ final class DiscoveryCandidate {
   /// 最近一次收到记录的时间。
   final DateTime lastSeen;
 
+  /// Per-channel last-seen timestamps. A merged row is swept only when
+  /// every channel leg is past its own channel TTL (CT-Disc v1.2.0 §5),
+  /// so a slow-beacon channel does not expire at the faster channels'
+  /// pace. Sources predating this field leave it empty and keep the
+  /// legacy single-TTL sweep against [lastSeen].
+  final Map<DiscoveryChannel, DateTime> lastSeenByChannel;
+
   /// 最近一次记录的信号强度提示（BLE RSSI，dBm）；缺失为 null。
   final int? signal;
 
@@ -105,6 +113,7 @@ final class DiscoveryCandidate {
     bool? provisionable,
     bool? busy,
     DateTime? lastSeen,
+    Map<DiscoveryChannel, DateTime>? lastSeenByChannel,
     int? signal,
   }) =>
       DiscoveryCandidate(
@@ -115,6 +124,7 @@ final class DiscoveryCandidate {
         provisionable: provisionable ?? this.provisionable,
         busy: busy ?? this.busy,
         lastSeen: lastSeen ?? this.lastSeen,
+        lastSeenByChannel: lastSeenByChannel ?? this.lastSeenByChannel,
         signal: signal ?? this.signal,
       );
 }
@@ -156,19 +166,41 @@ final class DiscoveryRegistry {
   }
 
   /// 淘汰 [now] 前 [ttl] 未再出现的候选，返回被移除项。
+  /// Candidates carrying per-channel liveness expire only when every
+  /// channel leg is past its own TTL — [ttlByChannel] override first,
+  /// falling back to [ttl] (CT-Disc v1.2.0 §5).
   List<DiscoveryCandidate> sweepExpired(
     DateTime now, {
     Duration ttl = const Duration(seconds: 12),
+    Map<DiscoveryChannel, Duration>? ttlByChannel,
   }) {
     final expired = <DiscoveryCandidate>[];
     _byKey.removeWhere((_, candidate) {
-      if (now.difference(candidate.lastSeen) > ttl) {
+      if (_isExpired(candidate, now, ttl, ttlByChannel)) {
         expired.add(candidate);
         return true;
       }
       return false;
     });
     return expired;
+  }
+
+  /// Expire rule: per-channel liveness requires ALL legs stale (each
+  /// against its own channel TTL); the legacy rule is the overall
+  /// lastSeen against [ttl].
+  static bool _isExpired(
+    DiscoveryCandidate candidate,
+    DateTime now,
+    Duration ttl,
+    Map<DiscoveryChannel, Duration>? ttlByChannel,
+  ) {
+    if (candidate.lastSeenByChannel.isEmpty) {
+      return now.difference(candidate.lastSeen) > ttl;
+    }
+    return candidate.lastSeenByChannel.entries.every((entry) {
+      final channelTtl = ttlByChannel?[entry.key] ?? ttl;
+      return now.difference(entry.value) > channelTtl;
+    });
   }
 
   String _keyOf(DiscoveryCandidate candidate) =>
@@ -192,5 +224,28 @@ final class DiscoveryRegistry {
             ? newer.lastSeen
             : older.lastSeen,
         signal: newer.signal ?? older.signal,
+        lastSeenByChannel: _mergeLastSeenByChannel(
+          older.lastSeenByChannel,
+          newer.lastSeenByChannel,
+        ),
       );
+
+  /// Union of the two per-channel liveness maps; the newer timestamp
+  /// wins per channel. Returns copies so a merged row never aliases the
+  /// absorbed candidate's map.
+  static Map<DiscoveryChannel, DateTime> _mergeLastSeenByChannel(
+    Map<DiscoveryChannel, DateTime> older,
+    Map<DiscoveryChannel, DateTime> newer,
+  ) {
+    if (older.isEmpty) return Map<DiscoveryChannel, DateTime>.of(newer);
+    if (newer.isEmpty) return Map<DiscoveryChannel, DateTime>.of(older);
+    final merged = Map<DiscoveryChannel, DateTime>.of(older);
+    newer.forEach((channel, seen) {
+      final existing = merged[channel];
+      if (existing == null || seen.isAfter(existing)) {
+        merged[channel] = seen;
+      }
+    });
+    return merged;
+  }
 }
