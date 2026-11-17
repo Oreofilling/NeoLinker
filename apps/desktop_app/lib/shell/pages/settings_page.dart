@@ -106,6 +106,32 @@ class SettingsPage extends StatelessWidget {
                         icon: Icons.wifi,
                         note: l.setApNote,
                       ),
+                      // §13.1 NIC picker: lives here with the other adapter
+                      // choices — the scan page only shows the joined labels.
+                      // Chip states the CURRENT pool (settings rows mirror
+                      // state, unlike action buttons); null hides the row
+                      // when no ct-disc channel is wired.
+                      if (controller.ctDiscIncludesVirtualNics != null) ...[
+                        Divider(height: 1, thickness: 1, color: c.border),
+                        _toggleRow(
+                          c,
+                          icon: Icons.lan_outlined,
+                          title: l.setNic,
+                          note: l.setNicNote,
+                          control: NLButton(
+                            key: const ValueKey('settings-nic-toggle'),
+                            label: controller.ctDiscIncludesVirtualNics!
+                                ? l.scanNicIncludeVirtual
+                                : l.scanNicPhysicalOnly,
+                            variant: NLButtonVariant.secondary,
+                            size: NLButtonSize.sm,
+                            onPressed: () =>
+                                controller.setCtDiscIncludeVirtualNics(
+                              !controller.ctDiscIncludesVirtualNics!,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

@@ -945,7 +945,7 @@ void main() {
     expect(find.text('未发现您的设备'), findsOneWidget);
   });
 
-  testWidgets('§13.1 NIC picker: 切换后标签跟随重绑结果', (tester) async {
+  testWidgets('§13.1 NIC picker: 设置页切换，扫描卡标签跟随重绑结果', (tester) async {
     // A real ct-disc child behind a microtask-only socket: widget tests
     // run under a fake clock, so the rebind's stop/start cycle must not
     // touch real OS sockets (see _FakeDgramSocket).
@@ -975,42 +975,39 @@ void main() {
     await pumpApp(tester, controller);
     await settle(tester); // 自检放行 → 扫描，ct-disc 已组播加入
 
+    // 扫描卡只读镜像：初始物理网卡，且旧位置的切换钮已撤。
     await tester.tap(find.text('查看详情'));
     await settle(tester);
     expect(find.text('Ethernet (127.0.0.1)'), findsOneWidget);
-    final toggle = find.byKey(const ValueKey('scan-nic-virtual-toggle'));
-    expect(
-      tester.widget<NLButton>(toggle).label,
-      '包含虚拟网卡', // 默认仅物理网卡：动作钮邀请扩池
-    );
+    expect(find.byKey(const ValueKey('scan-nic-virtual-toggle')), findsNothing);
+
+    // 设置页：网卡选择行随其余适配器行出现，chip 显示当前池。
+    await tester.tap(find.text('设置'));
+    await settle(tester);
+    final toggle = find.byKey(const ValueKey('settings-nic-toggle'));
+    expect(find.text('网卡选择'), findsOneWidget);
+    expect(tester.widget<NLButton>(toggle).label, '仅物理网卡');
 
     await tester.tap(toggle);
-    await settle(tester);
-    // Layered asserts: whichever fails first names the layer that stopped —
-    // tap dispatch, controller fan-out, or the stop/start rebind itself.
-    expect(
-      ctSource.includeVirtualNics,
-      isTrue,
-      reason: 'tap never reached the source',
-    );
-    expect(
-      controller.ctDiscIncludesVirtualNics,
-      isTrue,
-      reason: 'controller flag never flipped',
-    );
+    // The rebind is stop() + start(); pump until the controller state
+    // flips — the source flag moves synchronously on entry, so a stall
+    // after it names the rebind itself.
+    expect(ctSource.includeVirtualNics, isTrue, reason: 'tap never reached the source');
     for (var i = 0;
         i < 50 && !controller.ctDiscNicLabels.contains('Tailscale (127.0.0.1)');
         i++) {
       await tester.pump(const Duration(milliseconds: 16));
     }
-    expect(
-      controller.ctDiscNicLabels,
-      contains('Tailscale (127.0.0.1)'),
-      reason: 'rebind never re-joined',
-    );
+    expect(controller.ctDiscNicLabels, contains('Tailscale (127.0.0.1)'));
+    await settle(tester);
+    expect(tester.widget<NLButton>(toggle).label, '包含虚拟网卡');
+
+    // 回扫描页：卡片标签跟随扩池后的加入集。
+    await tester.tap(find.text('扫描设备'));
+    await settle(tester);
+    await tester.tap(find.text('查看详情'));
     await settle(tester);
     expect(find.text('Tailscale (127.0.0.1)'), findsOneWidget);
-    expect(tester.widget<NLButton>(toggle).label, '仅物理网卡');
 
     // End past the scan window (suite convention: every page test exits
     // into a quiet phase, so no scan/sweep timer is still armed at

@@ -315,6 +315,8 @@
   "setBle": "Bluetooth adapter",
   "setAp": "Wi-Fi adapter (AP channel)",
   "setApNote": "AP enumeration needs admin rights; the channel degrades without them",
+  "setNic": "NIC selection",
+  "setNicNote": "Feeds the CT-Disc channel scan; include VPN/virtual NICs when needed — applies by rebinding at once",
   "linkLostTitle": "Link lost",
   "linkLostBody": "The Bluetooth link to the device dropped. Everything you filled in is kept — wake the device again, then reconnect.",
   "linkLostDeliveringBody": "The link dropped while the config was being delivered, so the device may not have saved every change. Your entries are kept — reconnect and deliver once more; re-delivering is safe and never writes conflicting config.",

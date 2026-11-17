@@ -517,27 +517,8 @@ class _ScanPageState extends State<ScanPage> {
                 onPressed: _openWifiSettings,
               ),
             ],
-            // §13.1 NIC picker: the pool defaults to physical NICs; this
-            // action widens it to VPN/virtual adapters (and back) — the
-            // channel rebinds, the label list below mirrors the new join
-            // set. Hidden when no ct-disc source is wired (injected
-            // sources in tests) — same gate as the labels themselves.
-            if (entry.channel == DiscoveryChannel.ctDisc &&
-                controller.ctDiscIncludesVirtualNics != null) ...[
-              const SizedBox(height: 8),
-              NLButton(
-                key: const ValueKey('scan-nic-virtual-toggle'),
-                label: controller.ctDiscIncludesVirtualNics!
-                    ? l.scanNicPhysicalOnly
-                    : l.scanNicIncludeVirtual,
-                icon: Icons.tune,
-                variant: NLButtonVariant.ghost,
-                size: NLButtonSize.xs,
-                onPressed: () => controller.setCtDiscIncludeVirtualNics(
-                  !controller.ctDiscIncludesVirtualNics!,
-                ),
-              ),
-            ],
+            // §13.1 NIC picker moved to the settings page (2026-11-17):
+            // the card keeps only the read-only mirror below.
             // §13.1: with several NICs / VPN / virtual adapters around, the
             // user can see which interfaces (and subnets) the listener
             // joined. Hidden while empty (before the scan starts). Virtual
