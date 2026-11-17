@@ -1,12 +1,57 @@
-# NeoLinker 仓库约束
+# CLAUDE.md
 
-## 语言（C-L1）
+Guidance for Claude Code (or any coding agent) working in this repository.
+Human contributors: see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-- 项目主语言为英文：标识符、文件与目录名、提交信息、CI 配置、错误 reason 字符串一律英文
-- 注释（`///` 文档注释、行内注释、黄金向量的 description 字段）一律用中文叙述，**不得出现英文叙述或英文单词代替中文**（写「请求」而非 request，写「响应」而非 response）
-- 协议字段名、常量与既定术语按代码标识符原样引用、不翻译：MTU、UUID、AD Structure、payload_max、magic_version、packet_kind、op 名（`config.set` 等）、错误码（`BUSY` 等）、型号名（NE101/NE301）
-- 字段取值枚举放代码/数据里（枚举值、向量 expect），不放注释里
+## Commands
 
-## 由来
+Work happens inside `apps/desktop_app` or one of the `packages/*`; there is
+no top-level build.
 
-2026-10-29 用户约束：「代码约束——注释不要出现英文，该项目主语言是英文」。test_vectors 包为首个按此约束审查的代码。
+```bash
+cd apps/desktop_app
+flutter pub get
+flutter gen-l10n          # after any ARB edit — before analyze
+flutter analyze           # warnings are fatal in CI
+flutter test
+flutter build windows --release
+```
+
+CI runs analyze + test + a release build for every package on each push
+(`tool/ci.sh`).
+
+## Non-negotiables
+
+- **Flutter 3.47.8 pinned** — newer stable versions currently fail
+  `flutter analyze` on deprecation infos this tree hasn't migrated to.
+- **`flutter gen-l10n` before `flutter analyze`** — generated localization
+  files are gitignored; analyze fails on stale generated output.
+- **English everywhere** — identifiers, comments, commit messages, CI
+  config, and error reason strings. UI copy lives only in the ARB files
+  (`apps/desktop_app/lib/l10n/app_*.arb`; zh is the template language, en
+  the second language).
+- **`neolinker_ui` components never hardcode copy** — labels are passed in,
+  already localized, by the app layer.
+- **Design tokens are generated** — `packages/neolinker_ui/lib/src/tokens.dart`
+  comes from `tool/gen_tokens.py`; never hand-edit it. Widgets read colors
+  via `context.nl.*`, never raw hex.
+- **Brand mark stays in sync** — when the geometry changes, update
+  `design/logo.svg`, the `NLLogo` widget, and `tool/gen_app_icon.py`
+  together (all share the same 0..96 coordinate space).
+- **Conventional Commits** (`feat:`, `fix:`, `docs:`, …); subject under 50
+  characters, imperative mood.
+- **No secrets or internal infrastructure details** in code, docs, tests,
+  or examples.
+
+## Where things are
+
+- Protocol wire format: `packages/ct_prov_core` + `packages/test_vectors`
+  (golden vectors); specs in [docs/ct-prov-protocol.md](docs/ct-prov-protocol.md)
+  and [docs/ct-config-schema.md](docs/ct-config-schema.md).
+- Discovery channels (BLE advert scan / softAP SSID / CT-Disc multicast):
+  `packages/discovery_domain` plus the adapters under `packages/`.
+- Session phases (connect → capabilities → configure → deliver → receipt):
+  `packages/provisioning_session`.
+- Config-section schemas and validation: `packages/communication_domain`.
+- Windows is the only supported platform; do not add platform branches for
+  others without a plan to test them.
