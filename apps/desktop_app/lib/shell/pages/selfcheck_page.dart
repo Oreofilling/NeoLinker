@@ -83,11 +83,16 @@ class _SelfcheckPageState extends State<SelfcheckPage> {
                         ),
                       ),
                       const SizedBox(width: 10),
-                      Text(
-                        l.brandSubtitle,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: c.mutedForeground,
+                      // Flexible so the localized subtitle yields before
+                      // the centered brand row overflows the 520px card.
+                      Flexible(
+                        child: Text(
+                          l.brandSubtitle,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: c.mutedForeground,
+                          ),
                         ),
                       ),
                     ],

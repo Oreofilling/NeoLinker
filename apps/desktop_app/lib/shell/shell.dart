@@ -185,11 +185,19 @@ class _AppShellState extends State<AppShell> {
                   children: [
                     NLLogo(size: 22),
                     SizedBox(width: 8),
-                    Text(
-                      'NeoLinker',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
+                    // The wordmark scales down rather than ellipsizing —
+                    // brand text must stay whole in the 152px sidebar.
+                    Flexible(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'NeoLinker',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
                       ),
                     ),
                   ],
