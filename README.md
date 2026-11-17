@@ -1,79 +1,133 @@
 # NeoLinker
 
-设备扫描与通讯配置工具（无设备库）。Windows 10/11 桌面端为 P0 首发平台。
+[![CI](https://github.com/Oreofilling/neolinker/actions/workflows/ci.yml/badge.svg)](https://github.com/Oreofilling/neolinker/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-- 技术基线与门禁：`lowpower_camera/docs/NEOLINK_TECH_SELECTION.md`
-- 开发计划（M0–M6 / F1–F2）：`lowpower_camera/docs/NEOLINK_WINDOWS_DEV_PLAN.md`
-- UI 原型：`lowpower_camera/docs/neolink_ui_mockup.html`
+NeoLinker is a Windows desktop tool for discovering, provisioning, and
+configuring **CamThink NE-series low-power AI cameras** — over Bluetooth LE,
+the device's own softAP, or the local network.
 
-## 结构（M0）
+It is a companion tool, not firmware: put a camera into configuration mode,
+pick it up in NeoLinker, and the app walks you through
+connect → configure → verify, leaving a per-device receipt you can keep or
+export. The UI is bilingual (English / 中文) with light and dark themes.
+
+[中文说明](README.zh-CN.md)
+
+## Features
+
+- **Environment self-check** — on launch the app checks each transport
+  (BLE adapter, WLAN, LAN) and shows readiness before you start.
+- **Multi-channel discovery** — BLE advertisement scan, softAP SSID scan,
+  and LAN discovery ([CT-Disc](#device-support)), with model filtering,
+  pagination, and QR-code entry (scan or upload the code printed with the
+  device).
+- **Phase-driven provisioning** — the session moves through connect →
+  read capabilities → configure → deliver → result, with link-lost
+  detection and in-place reconnect if the device drops.
+- **Capability-driven config forms** — the device reports the config
+  modules it supports (Wi-Fi, cellular, MQTT, webhook, …); forms are
+  built from that report and prefilled with current values.
+- **Embedded device console** — NE503 devices expose a management web
+  page; it opens inside the app (WebView2) instead of a browser.
+- **Receipts & history** — every completed session writes a plain-text
+  receipt per device; past sessions are listed and exportable.
+
+## Device support
+
+| Device | BLE (CT-Prov/1) | SoftAP (CT-Prov over HTTP) | LAN (CT-Disc) | Notes |
+| ------ | :---: | :---: | :---: | ----- |
+| NE101  | ✅ | ✅ | — | Primary target; BLE leg field-tested end to end |
+| NE301  | ✅ | ✅ | — | Same protocol; comm-module config (Wi-Fi / cellular / MQTT / webhook) |
+| NE503  | — | — | ✅ | Discovery + embedded management console; newest, least field-tested leg |
+
+Field testing so far has focused on NE101; NE301 uses the same CT-Prov/1
+protocol and golden test vectors, NE503 support is newer.
+
+## Download
+
+Grab `NeoLinker_v0.2.0_windows_x64.zip` from
+[Releases](https://github.com/Oreofilling/neolinker/releases), unzip, and run
+`NeoLinker.exe`. No installer.
+
+Requirements: Windows 10/11 x64, the WebView2 Evergreen runtime (preinstalled
+on Windows 11 and most updated Windows 10), and a Bluetooth adapter for the
+BLE channel.
+
+## Build from source
+
+Prerequisites:
+
+- Windows 10/11 x64
+- [Flutter 3.47.8](https://docs.flutter.dev/get-started/install/windows)
+  (pinned — newer stable versions currently fail `flutter analyze` on
+  deprecation infos this tree hasn't migrated to yet; see
+  [ci.yml](.github/workflows/ci.yml))
+- Visual Studio 2022 Build Tools with the *Desktop development with C++*
+  workload
+- `nuget.exe` on `PATH` (the WebView2 plugin restores its NuGet package at
+  build time)
+
+```bash
+git clone https://github.com/Oreofilling/neolinker.git
+cd neolinker/apps/desktop_app
+flutter pub get
+flutter gen-l10n          # regenerate localizations after ARB edits
+flutter analyze
+flutter test
+flutter run -d windows    # or: flutter build windows --release
+```
+
+CI runs analyze + test + a release build for every package on every push:
+see [tool/ci.sh](tool/ci.sh).
+
+## Repository layout
 
 ```text
 neolinker/
-├── apps/desktop_app/        # Windows 入口（参考实现）
+├── apps/desktop_app/          # Windows app (Flutter)
 ├── packages/
-│   ├── neolinker_ui/          # NL 设计系统（OKLCH 令牌 + 基础组件）
-│   ├── ct_prov_core/        # CT-Prov/1 编解码、分片、错误码（M1 填充）
-│   ├── discovery_domain/    # 三路发现归一化（M2 填充）
-│   ├── provisioning_session/# 配置会话状态机（M2 填充）
-│   ├── communication_domain/# 节 schema 与校验（M3 填充）
-│   └── test_vectors/        # CT-Prov/1 黄金向量（广播/分片/信封）
-├── design/                  # 品牌标（链·N）：SVG 母版 / 概念稿 / PNG
-├── tool/ci.sh               # CI 入口
-├── tool/gen_tokens.py       # 设计令牌再生成（OKLCH→Dart）
-└── tool/gen_app_icon.py     # 品牌标 → app_icon.ico + 多尺寸 PNG
+│   ├── neolinker_ui/          # Design system: OKLCH tokens + base widgets
+│   ├── ct_prov_core/          # CT-Prov/1 codec: fragmentation + envelopes + error codes
+│   ├── test_vectors/          # CT-Prov/1 golden vectors (adverts / fragments / envelopes)
+│   ├── discovery_domain/      # Discovery domain model, three channels unified
+│   ├── provisioning_session/  # Provisioning session state machine
+│   ├── communication_domain/  # Config node schemas + validation
+│   ├── ble_universal/         # universal_ble adapter (scan bridge + GATT channel)
+│   ├── ble_adapter/           # CT-Prov BLE adapter (advert parsing + GATT transport)
+│   ├── softap_transport/      # CT-Prov over softAP HTTP (same session semantics as BLE)
+│   ├── ap_discovery_adapter/  # SoftAP discovery adapter (Windows WLAN SSID scan)
+│   └── ct_disc_adapter/       # CT-Disc LAN discovery adapter (multicast announce listener)
+├── design/                    # Brand mark (chain-N): SVG masters + PNG exports
+└── tool/                      # CI entry, design-token and app-icon generators
 ```
 
-## 中英双语（i18n）
+## Development notes
 
-- 方案：Flutter 官方 `gen-l10n`（ARB 文件 + 代码生成），zh 为模板语言，en 第二语言。
-- 文案位置：`apps/desktop_app/lib/l10n/app_*.arb`；查表扩展 `lib/l10n/labels.dart`。
-- 规则：**neolinker_ui 组件不硬编码文案**（label 一律由应用层传入并本地化）；新增语言 = 新增一个 ARB 文件。
-- 语言与主题同为工具设置项（允许持久化，M2 接入）。
-- `windows/` runner 已入库（自定义 `app_icon.ico`），CI 不再引导生成。
-- 本地改词后跑 `flutter gen-l10n`（apps/desktop_app，产出 `lib/l10n/app_localizations*.dart`，已 gitignore；CI 自动执行）。
+- **Localizations** — UI copy lives in
+  `apps/desktop_app/lib/l10n/app_*.arb` (zh is the template language, en the
+  second). Run `flutter gen-l10n` after editing; analyze fails on stale
+  generated files. Components in `neolinker_ui` never hardcode copy — labels
+  are passed in, already localized.
+- **Design tokens** — `packages/neolinker_ui/lib/src/tokens.dart` is
+  generated by `tool/gen_tokens.py`; don't hand-edit it. Widgets read colors
+  via `context.nl.*`, never raw hex.
+- **Brand mark** — masters live in `design/` (`logo.svg`, `logo-tile.svg`);
+  the in-app mark is the `NLLogo` widget; icons are regenerated with
+  `tool/gen_app_icon.py`. Keep the three in sync when geometry changes.
 
-## 命令
+## Roadmap
 
-```bash
-# 各包（或 apps/desktop_app）内：
-flutter pub get && flutter analyze && flutter test
-# 桌面端运行：
-cd apps/desktop_app && flutter run -d windows
-```
+- English protocol specifications (CT-Prov/1, CT-Disc) will be published in
+  `docs/`.
+- NE503 management leg is maturing (LAN API transport, embedded console).
 
-## 设计令牌
+## Contributing
 
-`packages/neolinker_ui/lib/src/tokens.dart` 由 `tool/gen_tokens.py` 从原型
-（NL 设计系统）的 OKLCH 令牌生成，亮/暗两套，经 `ThemeExtension` 注册；
-Widget 内用 `context.nl.background` 等访问。修改设计时改原型后重新生成，勿手改。
+See [CONTRIBUTING.md](CONTRIBUTING.md). This project follows the
+[Contributor Covenant](CODE_OF_CONDUCT.md); security reports go through
+[SECURITY.md](SECURITY.md), not public issues.
 
-## 品牌标（链·N）
+## License
 
-- 母版 `design/logo.svg`（单墨 currentColor，随语境着色）；`design/logo-accent.svg`
-  （accent 只出现在中心节点）；`design/logo-tile.svg`（elevated ink 圆角砖 + 反白标，
-  App 图标基形）。概念与备选见 `design/logo-concepts.html`。
-- App 图标与 PNG 由 `tool/gen_app_icon.py` 生成：
-  `apps/desktop_app/windows/runner/resources/app_icon.ico`（16–256，
-  ≤24px 用简化形：连续对角线）与 `design/png/` 多尺寸导出。
-- UI 内一律用 `NLLogo` 组件（neolinker_ui），不贴图；改几何时同步
-  母版 / 组件 / 生成脚本三处（同为 0..96 坐标空间）。
-
-## M0 状态
-
-- [x] monorepo 结构（apps + packages，path 依赖）
-- [x] neolinker_ui：OKLCH 令牌 / 卡片 / 按钮 / 徽章 / 骨架屏 / 下划线 tabs / 亮暗主题
-- [x] desktop_app 空壳：侧栏导航 + 顶栏主题/语言切换 + 页面占位
-- [x] 中英双语：gen-l10n + ARB（zh 模板），文案全走 AppLocalizations
-- [x] 品牌标：链·N 母版 + NLLogo 组件（侧栏已接） + app 图标
-- [x] 字体内置：Plus Jakarta Sans / Noto Sans SC / JetBrains Mono（OFL，pubspec 静态注册）
-- [x] windows/ runner 入库；Win 构建机本机 release 构建通过
-- [x] CI：Windows runner analyze + test + build
-- [x] CI 产物 Win10/11 真机验收（图标 / 字体 / 安装体验，2026-10-29 通过）
-
-## M1 状态
-
-- [x] test_vectors：广播/分片/信封三族黄金向量（MTU 23 极限 3825B、九错误码、NE101/NE301 两形态、四类非法输入）
-- [x] ct_prov_core：分片重组/切片 + 信封编解码（2026-10-29，14 测试全绿，切片与黄金帧逐字节一致，BOM 在字节层拒绝）
-- [x] ble_adapter：§4 广播/META 解析 + GATT 传输层（2026-10-29，14 测试全绿；CtGattChannel 端口就绪，universal_ble 具体适配器待真机 PoC 验证加密特征访问与系统 bonding）
-- [ ] F1 固件联调 roundtrip（待固件侧接入 CT-Prov/1）
+Apache-2.0 — see [LICENSE](LICENSE). Copyright 2026 CamThink Team.
