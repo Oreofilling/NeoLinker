@@ -6,6 +6,8 @@ import 'package:neolinker_ui/neolinker_ui.dart';
 import 'l10n/app_localizations.dart';
 import 'provisioning/provisioning_controller.dart';
 import 'services/device_web_console.dart';
+import 'services/device_web_opener.dart';
+import 'services/host_probe.dart';
 import 'services/settings_store.dart';
 import 'services/wifi_settings_opener.dart';
 import 'shell/shell.dart';
@@ -22,6 +24,8 @@ class NeoLinkerApp extends StatefulWidget {
     this.controller,
     this.settings,
     this.wifiSettingsOpener,
+    this.hostProbe,
+    this.consoleBrowserOpener,
   });
 
   /// 测试注入用；为空时自建并随组件销毁释放。
@@ -32,6 +36,10 @@ class NeoLinkerApp extends StatefulWidget {
 
   /// 直通扫描页的「打开系统 Wi-Fi 设置」动作（测试注入）。
   final WifiSettingsOpener? wifiSettingsOpener;
+
+  /// 直通扫描页的 LAN 控制台探测与浏览器按钮（测试注入）。
+  final HostProbe? hostProbe;
+  final DeviceWebOpener? consoleBrowserOpener;
 
   @override
   State<NeoLinkerApp> createState() => _NeoLinkerAppState();
@@ -54,12 +62,9 @@ class _NeoLinkerAppState extends State<NeoLinkerApp> {
     // default stays null so widget tests never touch a real WebView2.
     // Web mode therefore renders the console inside the connect page;
     // the system browser remains a manual fallback button there.
-    _owned =
-        widget.controller == null
-            ? ProvisioningController(
-              webConsoleBuilder: defaultWebConsoleBuilder(),
-            )
-            : null;
+    _owned = widget.controller == null
+        ? ProvisioningController(webConsoleBuilder: defaultWebConsoleBuilder())
+        : null;
     _settings = widget.settings ?? SettingsStore();
     final stored = _settings.load();
     if (stored?.theme != null) _mode = stored!.theme!;
@@ -87,6 +92,8 @@ class _NeoLinkerAppState extends State<NeoLinkerApp> {
         controller: _controller,
         dark: _mode == ThemeMode.dark,
         wifiSettingsOpener: widget.wifiSettingsOpener,
+        hostProbe: widget.hostProbe,
+        consoleBrowserOpener: widget.consoleBrowserOpener,
         onToggleTheme: () {
           setState(
             () => _mode = _mode == ThemeMode.light

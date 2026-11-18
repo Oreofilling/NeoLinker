@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:ap_discovery_adapter/ap_discovery_adapter.dart';
 import 'package:discovery_domain/discovery_domain.dart';
 import 'package:flutter/material.dart';
@@ -7,7 +9,9 @@ import 'package:provisioning_session/provisioning_session.dart';
 import '../../l10n/app_localizations.dart';
 import '../../l10n/channel_labels.dart';
 import '../../provisioning/provisioning_controller.dart';
+import '../../services/device_web_opener.dart';
 import '../../services/environment_probe.dart';
+import '../../services/host_probe.dart';
 import '../../services/wifi_settings_opener.dart';
 import '../widgets/scan_radar.dart';
 import '../widgets/web_console_dialog.dart';
@@ -37,6 +41,8 @@ class ScanPage extends StatefulWidget {
     required this.controller,
     this.onOpenGuide,
     this.wifiSettingsOpener,
+    this.hostProbe,
+    this.consoleBrowserOpener,
   });
 
   final ProvisioningController controller;
@@ -45,6 +51,14 @@ class ScanPage extends StatefulWidget {
   /// Test injection for the "open system Wi-Fi settings" action; null
   /// uses the real [openWifiSettings] service.
   final WifiSettingsOpener? wifiSettingsOpener;
+
+  /// Test injection for the LAN console reachability probe; null uses
+  /// the real [probeHostPort].
+  final HostProbe? hostProbe;
+
+  /// Test injection for the unreachable panel's browser button; null
+  /// uses the real [openDeviceWebPage].
+  final DeviceWebOpener? consoleBrowserOpener;
 
   @override
   State<ScanPage> createState() => _ScanPageState();
@@ -107,24 +121,105 @@ class _ScanPageState extends State<ScanPage> {
   /// serves its console directly. Same full-screen dialog as the NE301
   /// web hold (shared WebConsoleDialog); the non-embed fallback still
   /// shows the URL for a browser.
+  ///
+  /// A multicast beacon only proves the device spoke once — the console
+  /// needs a unicast TCP/443 route, which multi-NIC/VPN routing can break
+  /// while discovery still works. So the click probes first: unreachable
+  /// devices get the not-responding panel instead of a raw browser error
+  /// page; retry re-probes (the device may just have been waking up).
   Future<void> _openLanConsole(
     AppLocalizations l,
     DiscoveryCandidate device,
   ) async {
-    final url = Uri.parse('https://${device.host}/');
+    final host = device.host!;
+    final url = Uri.parse('https://$host/');
+    final probe = widget.hostProbe ?? probeHostPort;
+    final reachable = await probe(host, 443);
+    if (!mounted) return;
     await WebConsoleDialog.show(
       context,
       title: device.modelHint ?? device.macSuffix ?? url.host,
       url: url,
-      embed: controller.buildWebConsoleView(
-        url,
-        l.webConsoleReload,
-        l.webConsoleLoadFailed,
-      ),
+      embed: reachable
+          ? controller.buildWebConsoleView(url)
+          : _unreachablePanel(l, device, url),
     );
   }
 
-  Widget _apJoinDialog(BuildContext dialogContext, String ssid, String? current) {
+  /// Console-dialog body for a probe-unreachable device: what happened,
+  /// the host it could not reach, and the two ways out (retry the probe,
+  /// or try the machine's default browser — the URL stays copyable in
+  /// the dialog header either way).
+  Widget _unreachablePanel(
+    AppLocalizations l,
+    DiscoveryCandidate device,
+    Uri url,
+  ) {
+    return Builder(
+      builder: (context) {
+        final c = context.nl;
+        return Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.wifi_off_outlined, size: 28, color: c.warning),
+              const SizedBox(height: 10),
+              Text(
+                l.webConsoleProbeTitle,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Text(
+                  l.webConsoleProbeBody(device.host!),
+                  textAlign: TextAlign.center,
+                  style: NLType.aux.copyWith(color: c.mutedForeground),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  NLButton(
+                    label: l.webConsoleRetry,
+                    size: NLButtonSize.sm,
+                    onPressed: () {
+                      // Pop + reopen: the dialog itself is stateless, so a
+                      // retry is a fresh probe through the same door.
+                      Navigator.of(context).pop();
+                      unawaited(_openLanConsole(l, device));
+                    },
+                  ),
+                  NLButton(
+                    label: l.webHoldOpenBrowser,
+                    icon: Icons.open_in_new,
+                    variant: NLButtonVariant.secondary,
+                    size: NLButtonSize.sm,
+                    onPressed: () {
+                      final opener =
+                          widget.consoleBrowserOpener ?? openDeviceWebPage;
+                      unawaited(opener(url));
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _apJoinDialog(
+    BuildContext dialogContext,
+    String ssid,
+    String? current,
+  ) {
     final dc = dialogContext.nl;
     final dl = AppLocalizations.of(dialogContext)!;
     return Dialog(
@@ -177,9 +272,8 @@ class _ScanPageState extends State<ScanPage> {
                   label: dl.scanApDialogCancel,
                   variant: NLButtonVariant.ghost,
                   size: NLButtonSize.sm,
-                  onPressed: () => Navigator.of(dialogContext).pop(
-                    _ApJoinChoice.cancel,
-                  ),
+                  onPressed: () =>
+                      Navigator.of(dialogContext).pop(_ApJoinChoice.cancel),
                 ),
                 const SizedBox(width: 8),
                 // The in-app CT-Prov entry ("Configure in app",
@@ -577,8 +671,7 @@ class _ScanPageState extends State<ScanPage> {
     return [
       for (final device in candidates)
         if (modelFilter == null || device.modelHint == modelFilter)
-          if (channelFilter == null ||
-              device.channels.contains(channelFilter))
+          if (channelFilter == null || device.channels.contains(channelFilter))
             device,
     ];
   }
@@ -632,12 +725,11 @@ class _ScanPageState extends State<ScanPage> {
         : filtered.indexWhere(
             (device) => device.macSuffix == controller.qrFocusSuffix,
           );
-    final page = (focusedIndex >= 0 ? focusedIndex ~/ _pageSize : _page)
-        .clamp(0, totalPages - 1);
-    final visible = filtered
-        .skip(page * _pageSize)
-        .take(_pageSize)
-        .toList();
+    final page = (focusedIndex >= 0 ? focusedIndex ~/ _pageSize : _page).clamp(
+      0,
+      totalPages - 1,
+    );
+    final visible = filtered.skip(page * _pageSize).take(_pageSize).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -679,10 +771,7 @@ class _ScanPageState extends State<ScanPage> {
         children: [
           _tablePager(c, l, page: page, totalPages: totalPages),
           const Spacer(),
-          Text(
-            l.noHit,
-            style: NLType.aux.copyWith(color: c.mutedForeground),
-          ),
+          Text(l.noHit, style: NLType.aux.copyWith(color: c.mutedForeground)),
           const SizedBox(width: 6),
           _footnoteLink(c, l),
         ],
@@ -925,21 +1014,21 @@ class _ScanPageState extends State<ScanPage> {
           ),
           Divider(height: 1, thickness: 1, color: c.border),
           if (!allMatched && rows.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
-                child: Text(
-                  l.scanNoMatch,
-                  style: NLType.aux.copyWith(color: c.mutedForeground),
-                ),
-              )
-            else
-              for (final candidate in rows)
-                _deviceRow(
-                  c,
-                  l,
-                  candidate,
-                  hovered: _hoveredCandidateId == candidate.candidateId,
-                ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
+              child: Text(
+                l.scanNoMatch,
+                style: NLType.aux.copyWith(color: c.mutedForeground),
+              ),
+            )
+          else
+            for (final candidate in rows)
+              _deviceRow(
+                c,
+                l,
+                candidate,
+                hovered: _hoveredCandidateId == candidate.candidateId,
+              ),
         ],
       ),
     );
@@ -971,7 +1060,8 @@ class _ScanPageState extends State<ScanPage> {
     // yet, but when the beacon carried an address the row opens the
     // device's LAN console directly (NE503 https entry).
     final bleConnectable = device.channels.contains(DiscoveryChannel.ble);
-    final apConnectable = !bleConnectable &&
+    final apConnectable =
+        !bleConnectable &&
         device.channels.contains(DiscoveryChannel.accessPoint);
     final lanConsoleCapable =
         !bleConnectable && !apConnectable && device.host != null;
@@ -1182,9 +1272,7 @@ class _ScanPageState extends State<ScanPage> {
                                       : NLButtonVariant.secondary,
                                   onPressed: selectable
                                       ? () => bleConnectable
-                                            ? controller.selectCandidate(
-                                                device,
-                                              )
+                                            ? controller.selectCandidate(device)
                                             : _confirmApJoin(device)
                                       : null,
                                 )

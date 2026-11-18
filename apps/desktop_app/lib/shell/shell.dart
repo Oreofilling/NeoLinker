@@ -6,6 +6,8 @@ import 'package:provisioning_session/provisioning_session.dart';
 import '../app_metadata.dart';
 import '../l10n/app_localizations.dart';
 import '../provisioning/provisioning_controller.dart';
+import '../services/device_web_opener.dart';
+import '../services/host_probe.dart';
 import '../services/wifi_settings_opener.dart';
 import 'pages/config_page.dart';
 import 'pages/connect_page.dart';
@@ -30,12 +32,19 @@ class AppShell extends StatefulWidget {
     required this.langLabel,
     required this.onToggleLocale,
     this.wifiSettingsOpener,
+    this.hostProbe,
+    this.consoleBrowserOpener,
   });
 
   final ProvisioningController controller;
 
   /// Passed through to the scan page (test injection).
   final WifiSettingsOpener? wifiSettingsOpener;
+
+  /// Passed through to the scan page (test injection): LAN console
+  /// reachability probe + the unreachable panel's browser button.
+  final HostProbe? hostProbe;
+  final DeviceWebOpener? consoleBrowserOpener;
 
   final bool dark;
   final VoidCallback onToggleTheme;
@@ -132,10 +141,12 @@ class _AppShellState extends State<AppShell> {
           'config' => ConfigPage(controller: controller),
           'result' => ResultPage(controller: controller),
           _ => ScanPage(
-              controller: controller,
-              onOpenGuide: _openGuide,
-              wifiSettingsOpener: widget.wifiSettingsOpener,
-            ),
+            controller: controller,
+            onOpenGuide: _openGuide,
+            wifiSettingsOpener: widget.wifiSettingsOpener,
+            hostProbe: widget.hostProbe,
+            consoleBrowserOpener: widget.consoleBrowserOpener,
+          ),
         };
       case 'qrguide':
         return QrGuidePage(
@@ -157,6 +168,8 @@ class _AppShellState extends State<AppShell> {
           controller: controller,
           onOpenGuide: _openGuide,
           wifiSettingsOpener: widget.wifiSettingsOpener,
+          hostProbe: widget.hostProbe,
+          consoleBrowserOpener: widget.consoleBrowserOpener,
         );
     }
   }

@@ -70,7 +70,7 @@ class _ConnectPageState extends State<ConnectPage> {
       _consoleAutoShown = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && controller.phase == SessionPhase.webBrowsing) {
-          _openConsoleDialog(l);
+          _openConsoleDialog();
         }
       });
     } else if (!webHold) {
@@ -120,9 +120,9 @@ class _ConnectPageState extends State<ConnectPage> {
     // M5: the timeline's first two steps describe the link being built —
     // pairing/GATT for BLE rows, Wi-Fi join/gateway for softAP rows. The
     // reading steps are shared.
-    final viaAp = controller.selectedCandidate != null &&
-        !controller.selectedCandidate!.channels
-            .contains(DiscoveryChannel.ble);
+    final viaAp =
+        controller.selectedCandidate != null &&
+        !controller.selectedCandidate!.channels.contains(DiscoveryChannel.ble);
     final steps = [
       viaAp ? l.connectJoinWlan : l.connectPairing,
       viaAp ? l.connectDeviceLink : l.connectOpening,
@@ -188,7 +188,7 @@ class _ConnectPageState extends State<ConnectPage> {
 
   /// Opens the console in the shared full-screen dialog — the auto-open on
   /// join and the hold card's button land here alike.
-  void _openConsoleDialog(AppLocalizations l) {
+  void _openConsoleDialog() {
     final url = controller.webPageUrl;
     if (url == null) return;
     final label = _deviceLabel();
@@ -196,11 +196,7 @@ class _ConnectPageState extends State<ConnectPage> {
       context,
       title: label.isEmpty ? url.host : label,
       url: url,
-      embed: controller.buildWebConsoleView(
-        url,
-        l.webConsoleReload,
-        l.webConsoleLoadFailed,
-      ),
+      embed: controller.buildWebConsoleView(url),
     );
   }
 
@@ -335,7 +331,7 @@ class _ConnectPageState extends State<ConnectPage> {
                   label: l.scanOpenConsole,
                   variant: NLButtonVariant.secondary,
                   size: NLButtonSize.sm,
-                  onPressed: () => _openConsoleDialog(l),
+                  onPressed: _openConsoleDialog,
                 ),
                 NLButton(
                   label: l.webHoldOpenBrowser,

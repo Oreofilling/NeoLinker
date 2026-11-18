@@ -20,6 +20,7 @@ import 'package:desktop_app/provisioning/provisioning_controller.dart';
 import 'package:desktop_app/services/device_web_console.dart';
 import 'package:desktop_app/services/device_web_opener.dart';
 import 'package:desktop_app/services/environment_probe.dart';
+import 'package:desktop_app/services/host_probe.dart';
 import 'package:desktop_app/services/settings_store.dart';
 import 'package:desktop_app/services/wifi_settings_opener.dart';
 import 'package:desktop_app/shell/widgets/scan_radar.dart';
@@ -66,6 +67,8 @@ Future<void> pumpApp(
   ProvisioningController controller, {
   SettingsStore? settings,
   WifiSettingsOpener? wifiSettingsOpener,
+  HostProbe? hostProbe,
+  DeviceWebOpener? consoleBrowserOpener,
 }) async {
   // v7c: the scan page pins the QR strip at the bottom, so the scroll
   // viewport loses ~68px. Exercise a realistic desktop window (1280x900)
@@ -81,6 +84,8 @@ Future<void> pumpApp(
       controller: controller,
       settings: settings ?? SettingsStore.none(),
       wifiSettingsOpener: wifiSettingsOpener,
+      hostProbe: hostProbe,
+      consoleBrowserOpener: consoleBrowserOpener,
     ),
   );
 }
@@ -196,8 +201,7 @@ void main() {
         openedUrls.add(url);
         return true;
       },
-      webConsoleBuilder: (url, reloadLabel, loadFailedText) =>
-          Text('embed-console:${url.host}'),
+      webConsoleBuilder: (url) => Text('embed-console:${url.host}'),
     );
     addTearDown(source.close);
     addTearDown(device.close);
@@ -276,10 +280,8 @@ void main() {
     await pumpApp(tester, controller);
     await settle(tester);
 
-    final candidate =
-        sampleCandidate(candidateId: 'ap:NE101-P_BBC6DC').copyWith(
-          channels: const {DiscoveryChannel.accessPoint},
-        );
+    final candidate = sampleCandidate(candidateId: 'ap:NE101-P_BBC6DC')
+        .copyWith(channels: const {DiscoveryChannel.accessPoint});
     source.emit(candidate);
     await settle(tester);
 
@@ -367,14 +369,13 @@ void main() {
     final controller = wiredController(
       source,
       device,
-      webConsoleBuilder: (url, reloadLabel, loadFailedText) =>
-          Text('embed-console:${url.host}'),
+      webConsoleBuilder: (url) => Text('embed-console:${url.host}'),
     );
     addTearDown(source.close);
     addTearDown(device.close);
     addTearDown(controller.dispose);
 
-    await pumpApp(tester, controller);
+    await pumpApp(tester, controller, hostProbe: (_, __) async => true);
     await settle(tester);
 
     // 信标带 ip 的 CT-Disc 行（NE503）：候选携带 LAN 地址。
@@ -405,6 +406,72 @@ void main() {
     await settle(tester);
     expect(find.text('embed-console:192.168.93.72'), findsNothing);
 
+    await tester.tap(find.text('重新扫描'));
+    await tester.pump(const Duration(milliseconds: 16));
+    await tester.pump(const Duration(seconds: 21));
+    expect(controller.phase, SessionPhase.scanEmpty);
+  });
+
+  testWidgets('503 连接探测不通：无响应面板 + 浏览器兜底 + 重试恢复', (tester) async {
+    final source = FakeSource();
+    final device = FakeCtDevice();
+    final openedUrls = <Uri>[];
+    var reachable = false;
+    final controller = wiredController(
+      source,
+      device,
+      webConsoleBuilder: (url) => Text('embed-console:${url.host}'),
+    );
+    addTearDown(source.close);
+    addTearDown(device.close);
+    addTearDown(controller.dispose);
+
+    await pumpApp(
+      tester,
+      controller,
+      hostProbe: (_, __) async => reachable,
+      consoleBrowserOpener: (url) async {
+        openedUrls.add(url);
+        return true;
+      },
+    );
+    await settle(tester);
+
+    source.emit(
+      sampleCandidate(
+        candidateId: 'ctdisc:AABBCC@Ethernet',
+        modelHint: 'NE503',
+        host: '192.168.93.72',
+      ).copyWith(channels: const {DiscoveryChannel.ctDisc}),
+    );
+    await settle(tester);
+
+    // 探测不通：不进内嵌面，给无响应面板（标题 / 正文含 IP / 重试 / 浏览器）。
+    await tester.tap(find.text('连接'));
+    await settle(tester);
+    expect(find.text('embed-console:192.168.93.72'), findsNothing);
+    expect(find.text('设备无响应'), findsOneWidget);
+    expect(
+      find.text('无法通过网络访问 192.168.93.72，请确认设备在线且本机可达后重试。'),
+      findsOneWidget,
+    );
+    expect(find.text('重试'), findsOneWidget);
+    expect(find.text('在浏览器中打开'), findsOneWidget);
+
+    // 浏览器兜底：走注入的 opener，收到同一个 https 入口。
+    await tester.tap(find.text('在浏览器中打开'));
+    await settle(tester);
+    expect(openedUrls, [Uri.parse('https://192.168.93.72/')]);
+
+    // 重试 = 关闭重开：探测恢复后进入内嵌控制台。
+    reachable = true;
+    await tester.tap(find.text('重试'));
+    await settle(tester);
+    expect(find.text('设备无响应'), findsNothing);
+    expect(find.text('embed-console:192.168.93.72'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.close));
+    await settle(tester);
     await tester.tap(find.text('重新扫描'));
     await tester.pump(const Duration(milliseconds: 16));
     await tester.pump(const Duration(seconds: 21));
@@ -1021,9 +1088,7 @@ void main() {
         NicEndpoint(
           interfaceName: includeVirtual ? 'Tailscale' : 'Ethernet',
           address: InternetAddress.loopbackIPv4,
-          nicClass: includeVirtual
-              ? NicClass.virtualOrVpn
-              : NicClass.physical,
+          nicClass: includeVirtual ? NicClass.virtualOrVpn : NicClass.physical,
         ),
       ],
       socketFactory: (names) async => _FakeDgramSocket(),
@@ -1059,10 +1124,16 @@ void main() {
     // The rebind is stop() + start(); pump until the controller state
     // flips — the source flag moves synchronously on entry, so a stall
     // after it names the rebind itself.
-    expect(ctSource.includeVirtualNics, isTrue, reason: 'tap never reached the source');
-    for (var i = 0;
-        i < 50 && !controller.ctDiscNicLabels.contains('Tailscale (127.0.0.1)');
-        i++) {
+    expect(
+      ctSource.includeVirtualNics,
+      isTrue,
+      reason: 'tap never reached the source',
+    );
+    for (
+      var i = 0;
+      i < 50 && !controller.ctDiscNicLabels.contains('Tailscale (127.0.0.1)');
+      i++
+    ) {
       await tester.pump(const Duration(milliseconds: 16));
     }
     expect(controller.ctDiscNicLabels, contains('Tailscale (127.0.0.1)'));
@@ -1331,8 +1402,7 @@ void main() {
           readiness: CtBleReadiness.ready,
           detail: 'fake ready',
         ),
-        enumerateAdapters: () async =>
-            '[{"Name":"Wi-Fi","Status":"Disabled","PhysicalMediaType":"Native 802.11"}]',
+        enumerateAdapters: () async => '[{"Name":"Wi-Fi","Status":"Disabled","PhysicalMediaType":"Native 802.11"}]',
         nicEnumerator: ({bool includeVirtual = false}) async => [],
       ),
       discoverySource: source,
@@ -1347,10 +1417,14 @@ void main() {
     addTearDown(controller.dispose);
 
     var opened = 0;
-    await pumpApp(tester, controller, wifiSettingsOpener: () async {
-      opened++;
-      return true;
-    });
+    await pumpApp(
+      tester,
+      controller,
+      wifiSettingsOpener: () async {
+        opened++;
+        return true;
+      },
+    );
     await settle(tester); // 自检放行 → 扫描页
 
     // 紧凑条先呈现受限；入口只在展开的详情卡上。
@@ -1524,8 +1598,7 @@ final class _FakeDgramSocket implements RawDatagramSocket {
     Function? onError,
     void Function()? onDone,
     bool? cancelOnError,
-  }) =>
-      _NeverEventsSubscription();
+  }) => _NeverEventsSubscription();
 
   @override
   Datagram? receive() => null;
