@@ -35,10 +35,55 @@ WebConsoleBuilder? defaultWebConsoleBuilder() {
   );
 }
 
-/// WebView2 surface with a writable profile directory (WebView2's default
-/// sits next to the exe, which is read-only under a Program Files install)
-/// and a corner reload chip — after the device's idle sleep a reload is
-/// the wake action for the held link.
+/// App-scoped WebView2 environment, shared by every console surface.
+///
+/// A per-instance environment breaks on rapid reopen: WebView2 keeps the
+/// user-data folder locked while the previous browser process winds down,
+/// and a fresh WebViewEnvironment.create for the same folder fails inside
+/// that window (the "console could not start" panel). One environment per
+/// app run sidesteps the lock entirely; dialog open/close only mounts
+/// InAppWebView instances on it.
+WebViewEnvironment? _sharedEnvironment;
+Future<WebViewEnvironment?>? _sharedCreating;
+Object? _sharedError;
+
+Future<WebViewEnvironment?> _obtainSharedEnvironment() {
+  if (_sharedEnvironment != null) return Future.value(_sharedEnvironment);
+  return _sharedCreating ??= _createSharedEnvironment();
+}
+
+Future<WebViewEnvironment?> _createSharedEnvironment() async {
+  final appData = Platform.environment['APPDATA'];
+  final profile = appData == null ? null : '$appData\\NeoLinker\\WebView2';
+  try {
+    final environment = await WebViewEnvironment.create(
+      // Device consoles ride the nginx 443 entry with a self-signed
+      // cert; this WebView2 profile is console-only (own userDataFolder,
+      // never pointed at arbitrary sites), so skip cert validation here.
+      settings: WebViewEnvironmentSettings(
+        userDataFolder: profile,
+        additionalBrowserArguments: '--ignore-certificate-errors',
+      ),
+    );
+    _sharedEnvironment = environment;
+    return environment;
+  } catch (error) {
+    _sharedError = error;
+    return null;
+  } finally {
+    _sharedCreating = null;
+  }
+}
+
+/// Retry only makes sense after a failure — a live environment is kept.
+Future<WebViewEnvironment?> _retrySharedEnvironment() async {
+  if (_sharedEnvironment != null) return _sharedEnvironment;
+  _sharedError = null;
+  return _obtainSharedEnvironment();
+}
+
+/// WebView2 surface with a corner reload chip — after the device's idle
+/// sleep a reload is the wake action for the held link.
 class DeviceWebConsole extends StatefulWidget {
   const DeviceWebConsole({
     super.key,
@@ -56,76 +101,52 @@ class DeviceWebConsole extends StatefulWidget {
 }
 
 class _DeviceWebConsoleState extends State<DeviceWebConsole> {
-  WebViewEnvironment? _environment;
-  Object? _environmentError;
   InAppWebViewController? _webController;
 
   @override
   void initState() {
     super.initState();
-    unawaited(_createEnvironment());
+    unawaited(_attachEnvironment());
   }
 
-  Future<void> _createEnvironment() async {
-    final appData = Platform.environment['APPDATA'];
-    final profile = appData == null ? null : '$appData\\NeoLinker\\WebView2';
-    final WebViewEnvironment environment;
-    try {
-      environment = await WebViewEnvironment.create(
-        // Device consoles ride the nginx 443 entry with a self-signed
-        // cert; this WebView2 profile is console-only (own userDataFolder,
-        // never pointed at arbitrary sites), so skip cert validation here.
-        settings: WebViewEnvironmentSettings(
-          userDataFolder: profile,
-          additionalBrowserArguments: '--ignore-certificate-errors',
-        ),
-      );
-    } catch (error) {
-      if (mounted) setState(() => _environmentError = error);
-      return;
-    }
-    if (mounted) setState(() => _environment = environment);
+  Future<void> _attachEnvironment() async {
+    await _obtainSharedEnvironment();
+    if (mounted) setState(() {});
   }
 
   Future<void> _retryEnvironment() async {
-    setState(() => _environmentError = null);
-    await _createEnvironment();
-  }
-
-  @override
-  void dispose() {
-    unawaited(_environment?.dispose());
-    super.dispose();
+    await _retrySharedEnvironment();
+    if (mounted) setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    if (_environmentError != null) {
-      // WebView2 runtime missing/broken: the panel's browser button is the
-      // real fallback; this surface just explains and offers a retry.
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Text(
-                widget.loadFailedText,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodySmall,
+    if (_sharedEnvironment == null) {
+      if (_sharedError != null) {
+        // WebView2 runtime missing/broken: the panel's browser button is
+        // the real fallback; this surface just explains and offers a retry.
+        return Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Text(
+                  widget.loadFailedText,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall,
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            TextButton(
-              onPressed: _retryEnvironment,
-              child: Text(widget.reloadLabel),
-            ),
-          ],
-        ),
-      );
-    }
-    if (_environment == null) {
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: _retryEnvironment,
+                child: Text(widget.reloadLabel),
+              ),
+            ],
+          ),
+        );
+      }
       return const Center(
         child: SizedBox(
           width: 18,
@@ -138,7 +159,7 @@ class _DeviceWebConsoleState extends State<DeviceWebConsole> {
       children: [
         InAppWebView(
           key: ValueKey(widget.url),
-          webViewEnvironment: _environment,
+          webViewEnvironment: _sharedEnvironment,
           initialUrlRequest: URLRequest(url: WebUri(widget.url.toString())),
           initialSettings: InAppWebViewSettings(javaScriptEnabled: true),
           onWebViewCreated: (controller) => _webController = controller,
