@@ -1191,9 +1191,12 @@ class _ScanPageState extends State<ScanPage> {
                               : lanConsoleCapable
                               // NE503 rows: no in-app transport yet, but the
                               // beacon address opens the device's own https
-                              // console (embed seam, browser fallback).
+                              // console (embed seam, browser fallback). Same
+                              // connect verb as the other rows — the action
+                              // IS the connection for an always-reachable
+                              // LAN device.
                               ? NLButton(
-                                  label: l.scanOpenConsole,
+                                  label: l.scanSelect,
                                   size: NLButtonSize.sm,
                                   variant: hovered
                                       ? NLButtonVariant.primary

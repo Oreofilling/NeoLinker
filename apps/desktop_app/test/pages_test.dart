@@ -361,7 +361,7 @@ void main() {
     expect(controller.phase, SessionPhase.scanEmpty);
   });
 
-  testWidgets('CT-Disc 行带 host：显示 IP 且管理页按钮打开内嵌控制台', (tester) async {
+  testWidgets('CT-Disc 行带 host：显示 IP 且连接按钮打开内嵌控制台', (tester) async {
     final source = FakeSource();
     final device = FakeCtDevice();
     final controller = wiredController(
@@ -388,14 +388,14 @@ void main() {
     await settle(tester);
     expect(controller.phase, SessionPhase.resultsAvailable);
 
-    // 行内：标识行 = MAC 后缀 · IP；不再是「暂不支持连接」，也非连接链。
+    // 行内：标识行 = MAC 后缀 · IP；按钮与其余行同用「连接」动词。
     expect(find.text('NE503'), findsOneWidget);
     expect(find.text('AABBCC · 192.168.93.72'), findsOneWidget);
     expect(find.text('暂不支持连接'), findsNothing);
-    expect(find.text('连接'), findsNothing);
+    expect(find.text('连接'), findsOneWidget);
 
-    // 管理页：全屏对话框内嵌设备控制台（https 固定 443 入口）。
-    await tester.tap(find.text('管理页'));
+    // 连接：全屏对话框内嵌设备控制台（https 固定 443 入口）。
+    await tester.tap(find.text('连接'));
     await settle(tester);
     expect(find.text('embed-console:192.168.93.72'), findsOneWidget);
     expect(find.text('https://192.168.93.72/'), findsOneWidget);
