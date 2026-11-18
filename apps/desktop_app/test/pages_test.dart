@@ -181,7 +181,7 @@ void main() {
     expect(controller.phase, SessionPhase.scanEmpty);
   });
 
-  testWidgets('AP 行 web 模式（内嵌）：面板内嵌控制台，浏览器改手动兜底', (tester) async {
+  testWidgets('AP 行 web 模式（内嵌）：join 后自动弹全屏控制台，卡片留三按钮', (tester) async {
     final source = FakeSource();
     final device = FakeCtDevice();
     final joiner = FakeApJoiner();
@@ -218,13 +218,29 @@ void main() {
     await settle(tester);
     expect(controller.phase, SessionPhase.webBrowsing);
 
-    // 内嵌模式：join 后不再自动拉起浏览器。
+    // 内嵌模式：join 后不再自动拉起浏览器，控制台自动弹全屏对话框
+    // （与 503 管理页同一 WebConsoleDialog：内嵌面 + URL + 关闭钮）。
     expect(openedUrls, isEmpty);
-    // 面板：内嵌面 + URL 行 + 浏览器兜底 + 断开恢复。
     expect(find.text('embed-console:192.168.1.1'), findsOneWidget);
     expect(find.text('http://192.168.1.1/'), findsOneWidget);
+
+    // 关闭后驻留卡片：标题 + URL + 三按钮（管理页/浏览器/断开恢复），
+    // 内嵌面不在卡片里。
+    await tester.tap(find.byIcon(Icons.close));
+    await settle(tester);
+    expect(find.text('embed-console:192.168.1.1'), findsNothing);
+    expect(find.text('设备网页已打开'), findsOneWidget);
+    expect(find.text('http://192.168.1.1/'), findsOneWidget);
+    expect(find.text('管理页'), findsOneWidget);
     expect(find.text('在浏览器中打开'), findsOneWidget);
     expect(find.text('断开并恢复 Wi-Fi'), findsOneWidget);
+
+    // 管理页按钮重新打开同一对话框。
+    await tester.tap(find.text('管理页'));
+    await settle(tester);
+    expect(find.text('embed-console:192.168.1.1'), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.close));
+    await settle(tester);
 
     // 浏览器兜底变成手动动作。
     await tester.tap(find.text('在浏览器中打开'));

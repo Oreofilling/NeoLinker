@@ -10,6 +10,7 @@ import '../../provisioning/provisioning_controller.dart';
 import '../../services/environment_probe.dart';
 import '../../services/wifi_settings_opener.dart';
 import '../widgets/scan_radar.dart';
+import '../widgets/web_console_dialog.dart';
 
 /// Pre-join dialog outcome for AP-only rows: cancel keeps the list, web
 /// joins and shows the device console in the connect page, configure runs
@@ -103,77 +104,22 @@ class _ScanPageState extends State<ScanPage> {
   /// LAN console for CT-Disc rows that carry a beacon address (NE503):
   /// the provisioning transport is not wired yet, but the device's https
   /// entry (nginx 443, self-signed — the embed WebView skips cert checks)
-  /// serves its console directly. Full-screen dialog so the device page
-  /// has room; the non-embed fallback still shows the URL for a browser.
+  /// serves its console directly. Same full-screen dialog as the NE301
+  /// web hold (shared WebConsoleDialog); the non-embed fallback still
+  /// shows the URL for a browser.
   Future<void> _openLanConsole(
     AppLocalizations l,
     DiscoveryCandidate device,
   ) async {
     final url = Uri.parse('https://${device.host}/');
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) =>
-          _lanConsoleDialog(dialogContext, device, url),
-    );
-  }
-
-  Widget _lanConsoleDialog(
-    BuildContext dialogContext,
-    DiscoveryCandidate device,
-    Uri url,
-  ) {
-    final dc = dialogContext.nl;
-    final dl = AppLocalizations.of(dialogContext)!;
-    final embed = controller.buildWebConsoleView(
-      url,
-      dl.webConsoleReload,
-      dl.webConsoleLoadFailed,
-    );
-    return Dialog.fullscreen(
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.fromLTRB(20, 10, 12, 10),
-            decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: dc.border)),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.language, size: 16, color: dc.accentCyan),
-                const SizedBox(width: 8),
-                Text(
-                  device.modelHint ?? device.macSuffix ?? url.host,
-                  style: NLType.cardTitle.copyWith(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: SelectableText(
-                    url.toString(),
-                    maxLines: 1,
-                    style: NLType.mono.copyWith(color: dc.mutedForeground),
-                  ),
-                ),
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  icon: const Icon(Icons.close, size: 18),
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: embed ??
-                Center(
-                  child: SelectableText(
-                    url.toString(),
-                    style: NLType.mono,
-                  ),
-                ),
-          ),
-        ],
+    await WebConsoleDialog.show(
+      context,
+      title: device.modelHint ?? device.macSuffix ?? url.host,
+      url: url,
+      embed: controller.buildWebConsoleView(
+        url,
+        l.webConsoleReload,
+        l.webConsoleLoadFailed,
       ),
     );
   }

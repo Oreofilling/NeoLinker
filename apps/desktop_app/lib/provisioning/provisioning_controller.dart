@@ -573,8 +573,9 @@ class ProvisioningController extends ChangeNotifier {
         _machine.webLinkReady();
         webPageUrl = endpoint.replace(path: '/');
         onStep('opening web console');
-        // Embedded console renders on the hold panel; without the embed
-        // seam the browser owns the page instead (legacy path).
+        // Embedded console opens as the shared full-screen dialog (the
+        // hold card keeps reopen / browser / disconnect); without the
+        // embed seam the browser owns the page instead (legacy path).
         if (_webConsole == null) {
           await _openWebPage();
         }
@@ -663,8 +664,8 @@ class ProvisioningController extends ChangeNotifier {
   /// presentation). False keeps the browser hold panel.
   bool get webConsoleEmbedded => _webConsole != null;
 
-  /// Embedded console surface for the hold panel, or null when the embed
-  /// is unavailable — the page then falls back to the browser card.
+  /// Embedded console surface for the console dialog, or null when the
+  /// embed is unavailable — the page then falls back to the browser card.
   Widget? buildWebConsoleView(
     Uri url,
     String reloadLabel,

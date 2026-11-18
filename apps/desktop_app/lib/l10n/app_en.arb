@@ -107,6 +107,7 @@
   "connectErrorTitle": "Connection did not complete",
   "webHoldTitle": "Device web console opened",
   "webHoldOpenedAt": "Opened in the default browser — configure the device right on the page.",
+  "webHoldOpenedInApp": "The console opened in the app window — configure the device right there; reopen it below anytime.",
   "webHoldOpenFailed": "Could not open the browser — press \"Reopen\" to retry.",
   "webHoldKeepNote": "While held, this PC stays on the device hotspot and the previous Wi-Fi is offline; it restores on disconnect.",
   "webHoldIdleNote": "The device sleeps after a long idle stretch; if the page stops responding, press \"Reopen\".",

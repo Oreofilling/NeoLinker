@@ -7,6 +7,7 @@ import 'package:provisioning_session/provisioning_session.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../provisioning/provisioning_controller.dart';
+import '../widgets/web_console_dialog.dart';
 
 /// 建立连接页（v7d timeline）：配对 → GATT 链路 → 读设备信息 → 读能力，
 /// 纵向时间线呈现——已完成绿勾、当前步青色脉冲点、未开始灰圈，连接线
@@ -27,6 +28,10 @@ class _ConnectPageState extends State<ConnectPage> {
   /// (a hung read shows a growing timer, which is exactly the diagnostic
   /// signal this page wants to give).
   Timer? _ticker;
+
+  /// Whether the console dialog already auto-opened for this web session —
+  /// it opens once per join; later opens come from the hold card button.
+  bool _consoleAutoShown = false;
 
   @override
   void dispose() {
@@ -52,6 +57,24 @@ class _ConnectPageState extends State<ConnectPage> {
     } else if (!advancing && _ticker != null) {
       _ticker!.cancel();
       _ticker = null;
+    }
+
+    // Web hold: the console opens as the shared full-screen dialog the
+    // moment the link is ready (same surface as the NE503 LAN console);
+    // once per join, post-frame so the hold card is already underneath.
+    final webHold = controller.phase == SessionPhase.webBrowsing;
+    if (webHold &&
+        !_consoleAutoShown &&
+        controller.webConsoleEmbedded &&
+        controller.webPageUrl != null) {
+      _consoleAutoShown = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && controller.phase == SessionPhase.webBrowsing) {
+          _openConsoleDialog(l);
+        }
+      });
+    } else if (!webHold) {
+      _consoleAutoShown = false;
     }
 
     return ListenableBuilder(
@@ -163,22 +186,34 @@ class _ConnectPageState extends State<ConnectPage> {
     );
   }
 
-  /// Web mode hold panel (M5): the join succeeded and the device console
-  /// is in the browser — the app's remaining job is to make the held
-  /// state legible (hotspot kept, no internet, idle-sleep behavior) and
-  /// offer the one meaningful action: restore the previous Wi-Fi.
-  Widget _webHoldCard(NLColors c, AppLocalizations l) {
-    final deviceLabel = _deviceLabel();
+  /// Opens the console in the shared full-screen dialog — the auto-open on
+  /// join and the hold card's button land here alike.
+  void _openConsoleDialog(AppLocalizations l) {
     final url = controller.webPageUrl;
-    if (url != null) {
-      final embed = controller.buildWebConsoleView(
+    if (url == null) return;
+    final label = _deviceLabel();
+    WebConsoleDialog.show(
+      context,
+      title: label.isEmpty ? url.host : label,
+      url: url,
+      embed: controller.buildWebConsoleView(
         url,
         l.webConsoleReload,
         l.webConsoleLoadFailed,
-      );
-      if (embed != null) {
-        return _webEmbedCard(c, l, deviceLabel, url, embed);
-      }
+      ),
+    );
+  }
+
+  /// Web mode hold panel (M5): the join succeeded and the device console
+  /// is up — the app's remaining job is to make the held state legible
+  /// (hotspot kept, no internet, idle-sleep behavior) and offer the
+  /// meaningful actions: reopen the console, browser fallback, restore
+  /// the previous Wi-Fi.
+  Widget _webHoldCard(NLColors c, AppLocalizations l) {
+    final deviceLabel = _deviceLabel();
+    final url = controller.webPageUrl;
+    if (url != null && controller.webConsoleEmbedded) {
+      return _webEmbedCard(c, l, deviceLabel, url);
     }
     return NLCard(
       child: Padding(
@@ -246,55 +281,42 @@ class _ConnectPageState extends State<ConnectPage> {
     );
   }
 
-  /// Embedded web mode (preferred): the console renders inside the card —
-  /// the panel keeps the hold semantics legible (held hotspot, idle
-  /// sleep) and the two exits: browser fallback and restore Wi-Fi. The
-  /// reload action lives inside the console surface (corner chip).
+  /// Embedded web mode (preferred): the console opened as the shared
+  /// full-screen dialog on join; this card keeps the hold semantics
+  /// legible (held hotspot, idle sleep) and the three actions — reopen
+  /// the console dialog, browser fallback, restore Wi-Fi.
   Widget _webEmbedCard(
     NLColors c,
     AppLocalizations l,
     String deviceLabel,
     Uri url,
-    Widget embed,
   ) {
     return NLCard(
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                NLBadge(
-                  label: deviceLabel.isEmpty
-                      ? l.badgeChecking
-                      : l.connectWith(deviceLabel),
-                  variant: NLBadgeVariant.success,
-                  dot: true,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    url.toString(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: NLType.mono.copyWith(color: c.mutedForeground),
-                  ),
-                ),
-              ],
+            NLBadge(
+              label: deviceLabel.isEmpty
+                  ? l.badgeChecking
+                  : l.connectWith(deviceLabel),
+              variant: NLBadgeVariant.success,
+              dot: true,
             ),
-            const SizedBox(height: 10),
-            Container(
-              height: 520,
-              width: double.infinity,
-              clipBehavior: Clip.antiAlias,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(NLRadii.radiusLg),
-                border: Border.all(color: c.border),
-              ),
-              child: embed,
+            const SizedBox(height: 16),
+            Text(l.webHoldTitle, style: NLType.cardTitle),
+            const SizedBox(height: 8),
+            Text(
+              l.webHoldOpenedInApp,
+              style: NLType.body.copyWith(color: c.mutedForeground),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 6),
+            Text(
+              url.toString(),
+              style: NLType.mono.copyWith(color: c.foreground),
+            ),
+            const SizedBox(height: 12),
             Text(
               l.webHoldKeepNote,
               style: NLType.aux.copyWith(color: c.mutedForeground),
@@ -304,16 +326,23 @@ class _ConnectPageState extends State<ConnectPage> {
               l.webHoldIdleNote,
               style: NLType.aux.copyWith(color: c.mutedForeground),
             ),
-            const SizedBox(height: 14),
-            Row(
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
+                NLButton(
+                  label: l.scanOpenConsole,
+                  variant: NLButtonVariant.secondary,
+                  size: NLButtonSize.sm,
+                  onPressed: () => _openConsoleDialog(l),
+                ),
                 NLButton(
                   label: l.webHoldOpenBrowser,
                   variant: NLButtonVariant.secondary,
                   size: NLButtonSize.sm,
                   onPressed: controller.reopenWebPage,
                 ),
-                const SizedBox(width: 8),
                 NLButton(
                   label: l.webHoldDisconnect,
                   size: NLButtonSize.sm,
