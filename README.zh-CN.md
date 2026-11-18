@@ -65,8 +65,8 @@ flutter test
 flutter run -d windows    # 或：flutter build windows --release
 ```
 
-CI 在每次 push 对所有包跑 analyze + test + release 构建，入口
-[tool/ci.sh](tool/ci.sh)。
+CI 在每次 push 对所有包跑 analyze + test；Windows release 构建仅在
+`v*` 标签与手动触发时执行。入口 [tool/ci.sh](tool/ci.sh)。
 
 ## 仓库结构
 

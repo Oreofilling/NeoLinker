@@ -83,8 +83,9 @@ flutter test
 flutter run -d windows    # or: flutter build windows --release
 ```
 
-CI runs analyze + test + a release build for every package on every push:
-see [tool/ci.sh](tool/ci.sh).
+CI runs analyze + test for every package on every push; the Windows
+release build runs only on `v*` tags and manual dispatch. Entry point:
+[tool/ci.sh](tool/ci.sh).
 
 ## Repository layout
 
