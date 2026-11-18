@@ -222,7 +222,8 @@ void main() {
     // （与 503 管理页同一 WebConsoleDialog：内嵌面 + URL + 关闭钮）。
     expect(openedUrls, isEmpty);
     expect(find.text('embed-console:192.168.1.1'), findsOneWidget);
-    expect(find.text('http://192.168.1.1/'), findsOneWidget);
+    // URL 出现两处：驻留卡片（Text）+ 对话框头部（SelectableText）。
+    expect(find.text('http://192.168.1.1/'), findsNWidgets(2));
 
     // 关闭后驻留卡片：标题 + URL + 三按钮（管理页/浏览器/断开恢复），
     // 内嵌面不在卡片里。
