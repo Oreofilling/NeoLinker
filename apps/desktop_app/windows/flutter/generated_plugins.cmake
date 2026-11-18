@@ -5,6 +5,7 @@
 list(APPEND FLUTTER_PLUGIN_LIST
   camera_windows
   file_selector_windows
+  flutter_inappwebview_windows
   universal_ble
 )
 
