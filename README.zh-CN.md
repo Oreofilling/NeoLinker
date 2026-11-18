@@ -6,7 +6,7 @@
 
 # NeoLinker
 
-[![CI](https://github.com/Oreofilling/NeoLinker/actions/workflows/ci.yml/badge.svg)](https://github.com/Oreofilling/NeoLinker/actions/workflows/ci.yml)
+[![CI](https://github.com/camthink-ai/NeoLinker/actions/workflows/ci.yml/badge.svg)](https://github.com/camthink-ai/NeoLinker/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg?logo=apache)](LICENSE)
 
 NeoLinker 是面向 **CamThink NE 系列低功耗 AI 相机**的 Windows 桌面配置工具：
@@ -39,7 +39,7 @@ NE503 支持较新。
 
 ## 下载
 
-从 [Releases](https://github.com/Oreofilling/NeoLinker/releases) 下载
+从 [Releases](https://github.com/camthink-ai/NeoLinker/releases) 下载
 `NeoLinker_v0.2.0_windows_x64.zip`，解压后直接运行 `NeoLinker.exe`，无需安装。
 
 运行要求：Windows 10/11 x64、WebView2 Evergreen 运行时（Win11 及多数已更新
@@ -56,7 +56,7 @@ NE503 支持较新。
 - `PATH` 上有 `nuget.exe`（WebView2 插件构建时还原 NuGet 包）
 
 ```bash
-git clone https://github.com/Oreofilling/NeoLinker.git
+git clone https://github.com/camthink-ai/NeoLinker.git
 cd neolinker/apps/desktop_app
 flutter pub get
 flutter gen-l10n          # 改 ARB 后重新生成本地化代码

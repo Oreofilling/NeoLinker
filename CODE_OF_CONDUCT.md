@@ -63,7 +63,7 @@ reported to the community leaders responsible for enforcement by opening a
 private vulnerability report on the repository's **Security** tab (select
 "Report a vulnerability" and mark the report as a conduct matter), or by
 contacting the maintainers via the GitHub profile linked on the
-[repository page](https://github.com/Oreofilling/NeoLinker).
+[repository page](https://github.com/camthink-ai/NeoLinker).
 All complaints will be reviewed and investigated promptly and fairly.
 
 All community leaders are obligated to respect the privacy and security of the
