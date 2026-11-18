@@ -100,6 +100,84 @@ class _ScanPageState extends State<ScanPage> {
     );
   }
 
+  /// LAN console for CT-Disc rows that carry a beacon address (NE503):
+  /// the provisioning transport is not wired yet, but the device's https
+  /// entry (nginx 443, self-signed — the embed WebView skips cert checks)
+  /// serves its console directly. Full-screen dialog so the device page
+  /// has room; the non-embed fallback still shows the URL for a browser.
+  Future<void> _openLanConsole(
+    AppLocalizations l,
+    DiscoveryCandidate device,
+  ) async {
+    final url = Uri.parse('https://${device.host}/');
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) =>
+          _lanConsoleDialog(dialogContext, device, url),
+    );
+  }
+
+  Widget _lanConsoleDialog(
+    BuildContext dialogContext,
+    DiscoveryCandidate device,
+    Uri url,
+  ) {
+    final dc = dialogContext.nl;
+    final dl = AppLocalizations.of(dialogContext)!;
+    final embed = controller.buildWebConsoleView(
+      url,
+      dl.webConsoleReload,
+      dl.webConsoleLoadFailed,
+    );
+    return Dialog.fullscreen(
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.fromLTRB(20, 10, 12, 10),
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: dc.border)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.language, size: 16, color: dc.accentCyan),
+                const SizedBox(width: 8),
+                Text(
+                  device.modelHint ?? device.macSuffix ?? url.host,
+                  style: NLType.cardTitle.copyWith(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: SelectableText(
+                    url.toString(),
+                    maxLines: 1,
+                    style: NLType.mono.copyWith(color: dc.mutedForeground),
+                  ),
+                ),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.close, size: 18),
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: embed ??
+                Center(
+                  child: SelectableText(
+                    url.toString(),
+                    style: NLType.mono,
+                  ),
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _apJoinDialog(BuildContext dialogContext, String ssid, String? current) {
     final dc = dialogContext.nl;
     final dl = AppLocalizations.of(dialogContext)!;
@@ -943,11 +1021,14 @@ class _ScanPageState extends State<ScanPage> {
     final selectable = device.provisionable && !device.busy;
     // M5: BLE rows connect straight through the GATT chain; AP-only rows
     // go through the join dialog first (the machine's Wi-Fi moves — the
-    // user must know). CT-Disc-only rows stay display candidates until
-    // their transport lands.
+    // user must know). CT-Disc-only rows have no provisioning transport
+    // yet, but when the beacon carried an address the row opens the
+    // device's LAN console directly (NE503 https entry).
     final bleConnectable = device.channels.contains(DiscoveryChannel.ble);
     final apConnectable = !bleConnectable &&
         device.channels.contains(DiscoveryChannel.accessPoint);
+    final lanConsoleCapable =
+        !bleConnectable && !apConnectable && device.host != null;
     final age = DateTime.now().difference(device.lastSeen);
     final stale = age > controller.ttl;
     final focused =
@@ -1024,10 +1105,17 @@ class _ScanPageState extends State<ScanPage> {
                                 ],
                               ],
                             ),
-                            if (device.macSuffix != null) ...[
+                            if (device.macSuffix != null ||
+                                device.host != null) ...[
                               const SizedBox(height: 2),
                               Text(
-                                device.macSuffix!,
+                                [
+                                  if (device.macSuffix != null)
+                                    device.macSuffix!,
+                                  if (device.host != null) device.host!,
+                                ].join(' · '),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: NLType.mono.copyWith(
                                   color: c.mutedForeground,
                                 ),
@@ -1152,6 +1240,20 @@ class _ScanPageState extends State<ScanPage> {
                                                 device,
                                               )
                                             : _confirmApJoin(device)
+                                      : null,
+                                )
+                              : lanConsoleCapable
+                              // NE503 rows: no in-app transport yet, but the
+                              // beacon address opens the device's own https
+                              // console (embed seam, browser fallback).
+                              ? NLButton(
+                                  label: l.scanOpenConsole,
+                                  size: NLButtonSize.sm,
+                                  variant: hovered
+                                      ? NLButtonVariant.primary
+                                      : NLButtonVariant.secondary,
+                                  onPressed: selectable
+                                      ? () => _openLanConsole(l, device)
                                       : null,
                                 )
                               : Text(

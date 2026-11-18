@@ -438,11 +438,13 @@ DiscoveryCandidate sampleCandidate({
   String? macSuffix = 'AABBCC',
   String? modelHint = 'NE101',
   bool busy = false,
+  String? host,
   DateTime? seen,
 }) => DiscoveryCandidate(
   candidateId: candidateId,
   macSuffix: macSuffix,
   modelHint: modelHint,
+  host: host,
   channels: const {DiscoveryChannel.ble},
   provisionable: !busy,
   busy: busy,

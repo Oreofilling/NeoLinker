@@ -14,11 +14,13 @@ void main() {
     bool provisionable = true,
     int? signal = -55,
     String? modelHint = 'NE101',
+    String? host,
   }) =>
       DiscoveryCandidate(
         candidateId: candidateId,
         macSuffix: macSuffix,
         modelHint: modelHint,
+        host: host,
         channels: const {DiscoveryChannel.ble},
         provisionable: provisionable,
         busy: busy,
@@ -101,6 +103,30 @@ void main() {
       final merged = registry.snapshot.single;
       expect(merged.modelHint, 'NE101');
       expect(merged.signal, -50);
+    });
+
+    test('host 取最近非空值（DHCP 变更跟新值，缺失保留旧值）', () {
+      final registry = DiscoveryRegistry();
+      registry.absorb(bleCandidate('A1B2C3', host: '192.168.93.72'));
+      registry.absorb(
+        bleCandidate(
+          'A1B2C3',
+          lastSeen: t0.add(const Duration(seconds: 5)),
+          host: '192.168.93.99',
+        ),
+      );
+      expect(registry.snapshot.single.host, '192.168.93.99');
+
+      // 无线通道记录（host=null）并入时不得清掉已有 LAN 地址。
+      registry.absorb(
+        bleCandidate(
+          'A1B2C3',
+          candidateId: 'dev-ble',
+          lastSeen: t0.add(const Duration(seconds: 8)),
+          host: null,
+        ),
+      );
+      expect(registry.snapshot.single.host, '192.168.93.99');
     });
 
     test('updates 流发出每次合并后的候选', () async {

@@ -116,6 +116,11 @@ DiscoveryCandidate ctDiscCandidateFromObservation(
     candidateId: 'ctdisc:${observation.macSuffix}@$interfaceName',
     macSuffix: observation.macSuffix,
     modelHint: observation.product,
+    // The beacon's port field is loopback-bound on NE503 (platform-api
+    // listens on 127.0.0.1:8080) and unreachable remotely; carry only the
+    // address and let consumers pick the port per surface (console/API
+    // ride the nginx 443 entry).
+    host: observation.ip,
     channels: const {DiscoveryChannel.ctDisc},
     provisionable: true,
     busy: false,

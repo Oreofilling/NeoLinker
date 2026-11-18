@@ -79,6 +79,7 @@
   "@scanLastSeen": { "placeholders": { "seconds": { "type": "int" } } },
   "scanNotProvisionable": "不可配置",
   "scanChannelPending": "暂不支持连接",
+  "scanOpenConsole": "管理页",
   "scanUnknownModel": "未知型号",
   "scanSignal": "{dbm} dBm",
   "@scanSignal": { "placeholders": { "dbm": { "type": "int" } } },

@@ -79,6 +79,7 @@
   "@scanLastSeen": { "placeholders": { "seconds": { "type": "int" } } },
   "scanNotProvisionable": "Not provisionable",
   "scanChannelPending": "Connect not available yet",
+  "scanOpenConsole": "Console",
   "scanUnknownModel": "Unknown model",
   "scanSignal": "{dbm} dBm",
   "@scanSignal": { "placeholders": { "dbm": { "type": "int" } } },

@@ -72,7 +72,13 @@ class _DeviceWebConsoleState extends State<DeviceWebConsole> {
     final WebViewEnvironment environment;
     try {
       environment = await WebViewEnvironment.create(
-        settings: WebViewEnvironmentSettings(userDataFolder: profile),
+        // Device consoles ride the nginx 443 entry with a self-signed
+        // cert; this WebView2 profile is console-only (own userDataFolder,
+        // never pointed at arbitrary sites), so skip cert validation here.
+        settings: WebViewEnvironmentSettings(
+          userDataFolder: profile,
+          additionalBrowserArguments: '--ignore-certificate-errors',
+        ),
       );
     } catch (error) {
       if (mounted) setState(() => _environmentError = error);
