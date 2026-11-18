@@ -263,9 +263,9 @@ class ProvisioningController extends ChangeNotifier {
   /// Virtual/VPN entries appear once the NIC picker opts them in — the
   /// list mirrors the real join set, so the toggle's effect stays visible.
   List<String> get ctDiscNicLabels => [
-        for (final nic in _ctDiscSource?.joinedNics ?? const <NicEndpoint>[])
-          nic.label,
-      ];
+    for (final nic in _ctDiscSource?.joinedNics ?? const <NicEndpoint>[])
+      nic.label,
+  ];
 
   /// Whether the CT-Disc NIC pool includes VPN/virtual adapters; null
   /// when no ct-disc channel is wired.
@@ -462,8 +462,8 @@ class ProvisioningController extends ChangeNotifier {
     // row must fail with a stable reason instead of a misleading attempt
     // (its transport is a separate protocol face, still future work).
     final viaBle = candidate.channels.contains(DiscoveryChannel.ble);
-    final viaAp = !viaBle &&
-        candidate.channels.contains(DiscoveryChannel.accessPoint);
+    final viaAp =
+        !viaBle && candidate.channels.contains(DiscoveryChannel.accessPoint);
     if (!viaBle && !viaAp) {
       if (_machine.phase == SessionPhase.connecting) {
         await _machine.failConnection('channel_unsupported', null);
@@ -573,8 +573,9 @@ class ProvisioningController extends ChangeNotifier {
         _machine.webLinkReady();
         webPageUrl = endpoint.replace(path: '/');
         onStep('opening web console');
-        // Embedded console renders on the hold panel; without the embed
-        // seam the browser owns the page instead (legacy path).
+        // Embedded console opens as the shared full-screen dialog (the
+        // hold card keeps reopen / browser / disconnect); without the
+        // embed seam the browser owns the page instead (legacy path).
         if (_webConsole == null) {
           await _openWebPage();
         }
@@ -629,9 +630,8 @@ class ProvisioningController extends ChangeNotifier {
   /// softAP capability failures keep the transport's stable codes (e.g.
   /// ap_unreachable -> "join the device AP first"); everything else is a
   /// plain capabilities failure.
-  String _apFailureReason(Object error) => error is SoftapTransportException
-      ? error.code
-      : 'capabilities_failed';
+  String _apFailureReason(Object error) =>
+      error is SoftapTransportException ? error.code : 'capabilities_failed';
 
   /// 连接/能力失败后返回候选列表（候选保留，可直接重选）。
   void switchCandidate() {
@@ -663,13 +663,9 @@ class ProvisioningController extends ChangeNotifier {
   /// presentation). False keeps the browser hold panel.
   bool get webConsoleEmbedded => _webConsole != null;
 
-  /// Embedded console surface for the hold panel, or null when the embed
-  /// is unavailable — the page then falls back to the browser card.
-  Widget? buildWebConsoleView(
-    Uri url,
-    String reloadLabel,
-    String loadFailedText,
-  ) => _webConsole?.call(url, reloadLabel, loadFailedText);
+  /// Embedded console surface for the console dialog, or null when the
+  /// embed is unavailable — the page then falls back to the browser card.
+  Widget? buildWebConsoleView(Uri url) => _webConsole?.call(url);
 
   /// Open the console in the default browser: the legacy web-mode surface,
   /// and the escape hatch when the embedded console will not do (printing,
@@ -758,8 +754,8 @@ class ProvisioningController extends ChangeNotifier {
       // 链路按通道重建：BLE 走配对+GATT；softAP 重新加入设备热点（复用
       // 首连时捕获的恢复点——此刻的 radio 状态不是恢复目标）。
       if (candidate.channels.contains(DiscoveryChannel.ble)) {
-        final deviceId = _bleDeviceIds[_mergeKeyOf(candidate)] ??
-            candidate.candidateId;
+        final deviceId =
+            _bleDeviceIds[_mergeKeyOf(candidate)] ?? candidate.candidateId;
         await _pair(deviceId);
         final channel = await _connect(deviceId, (_) {});
         _channel = channel;
@@ -1250,9 +1246,7 @@ class ProvisioningController extends ChangeNotifier {
         _registry.sweepExpired(
           DateTime.now(),
           ttl: ttl,
-          ttlByChannel: const {
-            DiscoveryChannel.ctDisc: kCtDiscChannelTimeout,
-          },
+          ttlByChannel: const {DiscoveryChannel.ctDisc: kCtDiscChannelTimeout},
         );
         if (_registry.snapshot.isEmpty) {
           unawaited(rescan());
@@ -1318,8 +1312,7 @@ class ProvisioningController extends ChangeNotifier {
   /// source tree is wired (plain source or composite).
   Future<void> _fireProbeCapableSources() async {
     DiscoverySource root = _source;
-    final sources =
-        root is CompositeDiscoverySource ? root.sources : [root];
+    final sources = root is CompositeDiscoverySource ? root.sources : [root];
     for (final source in sources) {
       if (source is ProbeCapableDiscoverySource) {
         await source.sendProbe();

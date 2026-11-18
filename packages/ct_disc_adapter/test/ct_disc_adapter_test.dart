@@ -109,6 +109,10 @@ void main() {
       expect(candidate.candidateId, 'ctdisc:84C102@Ethernet');
       expect(candidate.macSuffix, '84C102');
       expect(candidate.modelHint, 'NE301');
+      // The beacon ip flows into the candidate host (LAN console entry);
+      // the beacon port is deliberately NOT carried — devices report a
+      // loopback-bound port, consumers pick 443 for the https entry.
+      expect(candidate.host, '192.168.1.42');
       expect(candidate.channels, const {DiscoveryChannel.ctDisc});
       expect(candidate.provisionable, isTrue);
       expect(candidate.busy, isFalse);

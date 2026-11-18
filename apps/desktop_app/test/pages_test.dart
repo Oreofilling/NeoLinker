@@ -20,6 +20,7 @@ import 'package:desktop_app/provisioning/provisioning_controller.dart';
 import 'package:desktop_app/services/device_web_console.dart';
 import 'package:desktop_app/services/device_web_opener.dart';
 import 'package:desktop_app/services/environment_probe.dart';
+import 'package:desktop_app/services/host_probe.dart';
 import 'package:desktop_app/services/settings_store.dart';
 import 'package:desktop_app/services/wifi_settings_opener.dart';
 import 'package:desktop_app/shell/widgets/scan_radar.dart';
@@ -66,6 +67,8 @@ Future<void> pumpApp(
   ProvisioningController controller, {
   SettingsStore? settings,
   WifiSettingsOpener? wifiSettingsOpener,
+  HostProbe? hostProbe,
+  DeviceWebOpener? consoleBrowserOpener,
 }) async {
   // v7c: the scan page pins the QR strip at the bottom, so the scroll
   // viewport loses ~68px. Exercise a realistic desktop window (1280x900)
@@ -81,6 +84,8 @@ Future<void> pumpApp(
       controller: controller,
       settings: settings ?? SettingsStore.none(),
       wifiSettingsOpener: wifiSettingsOpener,
+      hostProbe: hostProbe,
+      consoleBrowserOpener: consoleBrowserOpener,
     ),
   );
 }
@@ -181,7 +186,7 @@ void main() {
     expect(controller.phase, SessionPhase.scanEmpty);
   });
 
-  testWidgets('AP 行 web 模式（内嵌）：面板内嵌控制台，浏览器改手动兜底', (tester) async {
+  testWidgets('AP 行 web 模式（内嵌）：join 后自动弹全屏控制台，卡片留三按钮', (tester) async {
     final source = FakeSource();
     final device = FakeCtDevice();
     final joiner = FakeApJoiner();
@@ -196,8 +201,7 @@ void main() {
         openedUrls.add(url);
         return true;
       },
-      webConsoleBuilder: (url, reloadLabel, loadFailedText) =>
-          Text('embed-console:${url.host}'),
+      webConsoleBuilder: (url) => Text('embed-console:${url.host}'),
     );
     addTearDown(source.close);
     addTearDown(device.close);
@@ -218,13 +222,30 @@ void main() {
     await settle(tester);
     expect(controller.phase, SessionPhase.webBrowsing);
 
-    // 内嵌模式：join 后不再自动拉起浏览器。
+    // 内嵌模式：join 后不再自动拉起浏览器，控制台自动弹全屏对话框
+    // （与 503 管理页同一 WebConsoleDialog：内嵌面 + URL + 关闭钮）。
     expect(openedUrls, isEmpty);
-    // 面板：内嵌面 + URL 行 + 浏览器兜底 + 断开恢复。
     expect(find.text('embed-console:192.168.1.1'), findsOneWidget);
+    // URL 出现两处：驻留卡片（Text）+ 对话框头部（SelectableText）。
+    expect(find.text('http://192.168.1.1/'), findsNWidgets(2));
+
+    // 关闭后驻留卡片：标题 + URL + 三按钮（管理页/浏览器/断开恢复），
+    // 内嵌面不在卡片里。
+    await tester.tap(find.byIcon(Icons.close));
+    await settle(tester);
+    expect(find.text('embed-console:192.168.1.1'), findsNothing);
+    expect(find.text('设备网页已打开'), findsOneWidget);
     expect(find.text('http://192.168.1.1/'), findsOneWidget);
+    expect(find.text('管理页'), findsOneWidget);
     expect(find.text('在浏览器中打开'), findsOneWidget);
     expect(find.text('断开并恢复 Wi-Fi'), findsOneWidget);
+
+    // 管理页按钮重新打开同一对话框。
+    await tester.tap(find.text('管理页'));
+    await settle(tester);
+    expect(find.text('embed-console:192.168.1.1'), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.close));
+    await settle(tester);
 
     // 浏览器兜底变成手动动作。
     await tester.tap(find.text('在浏览器中打开'));
@@ -259,10 +280,8 @@ void main() {
     await pumpApp(tester, controller);
     await settle(tester);
 
-    final candidate =
-        sampleCandidate(candidateId: 'ap:NE101-P_BBC6DC').copyWith(
-          channels: const {DiscoveryChannel.accessPoint},
-        );
+    final candidate = sampleCandidate(candidateId: 'ap:NE101-P_BBC6DC')
+        .copyWith(channels: const {DiscoveryChannel.accessPoint});
     source.emit(candidate);
     await settle(tester);
 
@@ -338,6 +357,121 @@ void main() {
 
     // 结果页保持 3s 清扫定时器（同忙候选用例）：重扫清空注册表后
     // 泵过扫描窗口收敛回空态，无悬挂定时器。
+    await tester.tap(find.text('重新扫描'));
+    await tester.pump(const Duration(milliseconds: 16));
+    await tester.pump(const Duration(seconds: 21));
+    expect(controller.phase, SessionPhase.scanEmpty);
+  });
+
+  testWidgets('CT-Disc 行带 host：显示 IP 且连接按钮打开内嵌控制台', (tester) async {
+    final source = FakeSource();
+    final device = FakeCtDevice();
+    final controller = wiredController(
+      source,
+      device,
+      webConsoleBuilder: (url) => Text('embed-console:${url.host}'),
+    );
+    addTearDown(source.close);
+    addTearDown(device.close);
+    addTearDown(controller.dispose);
+
+    await pumpApp(tester, controller, hostProbe: (_, __) async => true);
+    await settle(tester);
+
+    // 信标带 ip 的 CT-Disc 行（NE503）：候选携带 LAN 地址。
+    source.emit(
+      sampleCandidate(
+        candidateId: 'ctdisc:AABBCC@Ethernet',
+        modelHint: 'NE503',
+        host: '192.168.93.72',
+      ).copyWith(channels: const {DiscoveryChannel.ctDisc}),
+    );
+    await settle(tester);
+    expect(controller.phase, SessionPhase.resultsAvailable);
+
+    // 行内：标识行 = MAC 后缀 · IP；按钮与其余行同用「连接」动词。
+    expect(find.text('NE503'), findsOneWidget);
+    expect(find.text('AABBCC · 192.168.93.72'), findsOneWidget);
+    expect(find.text('暂不支持连接'), findsNothing);
+    expect(find.text('连接'), findsOneWidget);
+
+    // 连接：全屏对话框内嵌设备控制台（https 固定 443 入口）。
+    await tester.tap(find.text('连接'));
+    await settle(tester);
+    expect(find.text('embed-console:192.168.93.72'), findsOneWidget);
+    expect(find.text('https://192.168.93.72/'), findsOneWidget);
+
+    // 关闭回到列表；随后按清扫节奏收敛回空态（无悬挂定时器）。
+    await tester.tap(find.byIcon(Icons.close));
+    await settle(tester);
+    expect(find.text('embed-console:192.168.93.72'), findsNothing);
+
+    await tester.tap(find.text('重新扫描'));
+    await tester.pump(const Duration(milliseconds: 16));
+    await tester.pump(const Duration(seconds: 21));
+    expect(controller.phase, SessionPhase.scanEmpty);
+  });
+
+  testWidgets('503 连接探测不通：无响应面板 + 浏览器兜底 + 重试恢复', (tester) async {
+    final source = FakeSource();
+    final device = FakeCtDevice();
+    final openedUrls = <Uri>[];
+    var reachable = false;
+    final controller = wiredController(
+      source,
+      device,
+      webConsoleBuilder: (url) => Text('embed-console:${url.host}'),
+    );
+    addTearDown(source.close);
+    addTearDown(device.close);
+    addTearDown(controller.dispose);
+
+    await pumpApp(
+      tester,
+      controller,
+      hostProbe: (_, __) async => reachable,
+      consoleBrowserOpener: (url) async {
+        openedUrls.add(url);
+        return true;
+      },
+    );
+    await settle(tester);
+
+    source.emit(
+      sampleCandidate(
+        candidateId: 'ctdisc:AABBCC@Ethernet',
+        modelHint: 'NE503',
+        host: '192.168.93.72',
+      ).copyWith(channels: const {DiscoveryChannel.ctDisc}),
+    );
+    await settle(tester);
+
+    // 探测不通：不进内嵌面，给无响应面板（标题 / 正文含 IP / 重试 / 浏览器）。
+    await tester.tap(find.text('连接'));
+    await settle(tester);
+    expect(find.text('embed-console:192.168.93.72'), findsNothing);
+    expect(find.text('设备无响应'), findsOneWidget);
+    expect(
+      find.text('无法通过网络访问 192.168.93.72，请确认设备在线且本机可达后重试。'),
+      findsOneWidget,
+    );
+    expect(find.text('重试'), findsOneWidget);
+    expect(find.text('在浏览器中打开'), findsOneWidget);
+
+    // 浏览器兜底：走注入的 opener，收到同一个 https 入口。
+    await tester.tap(find.text('在浏览器中打开'));
+    await settle(tester);
+    expect(openedUrls, [Uri.parse('https://192.168.93.72/')]);
+
+    // 重试 = 关闭重开：探测恢复后进入内嵌控制台。
+    reachable = true;
+    await tester.tap(find.text('重试'));
+    await settle(tester);
+    expect(find.text('设备无响应'), findsNothing);
+    expect(find.text('embed-console:192.168.93.72'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.close));
+    await settle(tester);
     await tester.tap(find.text('重新扫描'));
     await tester.pump(const Duration(milliseconds: 16));
     await tester.pump(const Duration(seconds: 21));
@@ -954,9 +1088,7 @@ void main() {
         NicEndpoint(
           interfaceName: includeVirtual ? 'Tailscale' : 'Ethernet',
           address: InternetAddress.loopbackIPv4,
-          nicClass: includeVirtual
-              ? NicClass.virtualOrVpn
-              : NicClass.physical,
+          nicClass: includeVirtual ? NicClass.virtualOrVpn : NicClass.physical,
         ),
       ],
       socketFactory: (names) async => _FakeDgramSocket(),
@@ -992,10 +1124,16 @@ void main() {
     // The rebind is stop() + start(); pump until the controller state
     // flips — the source flag moves synchronously on entry, so a stall
     // after it names the rebind itself.
-    expect(ctSource.includeVirtualNics, isTrue, reason: 'tap never reached the source');
-    for (var i = 0;
-        i < 50 && !controller.ctDiscNicLabels.contains('Tailscale (127.0.0.1)');
-        i++) {
+    expect(
+      ctSource.includeVirtualNics,
+      isTrue,
+      reason: 'tap never reached the source',
+    );
+    for (
+      var i = 0;
+      i < 50 && !controller.ctDiscNicLabels.contains('Tailscale (127.0.0.1)');
+      i++
+    ) {
       await tester.pump(const Duration(milliseconds: 16));
     }
     expect(controller.ctDiscNicLabels, contains('Tailscale (127.0.0.1)'));
@@ -1264,8 +1402,7 @@ void main() {
           readiness: CtBleReadiness.ready,
           detail: 'fake ready',
         ),
-        enumerateAdapters: () async =>
-            '[{"Name":"Wi-Fi","Status":"Disabled","PhysicalMediaType":"Native 802.11"}]',
+        enumerateAdapters: () async => '[{"Name":"Wi-Fi","Status":"Disabled","PhysicalMediaType":"Native 802.11"}]',
         nicEnumerator: ({bool includeVirtual = false}) async => [],
       ),
       discoverySource: source,
@@ -1280,10 +1417,14 @@ void main() {
     addTearDown(controller.dispose);
 
     var opened = 0;
-    await pumpApp(tester, controller, wifiSettingsOpener: () async {
-      opened++;
-      return true;
-    });
+    await pumpApp(
+      tester,
+      controller,
+      wifiSettingsOpener: () async {
+        opened++;
+        return true;
+      },
+    );
     await settle(tester); // 自检放行 → 扫描页
 
     // 紧凑条先呈现受限；入口只在展开的详情卡上。
@@ -1457,8 +1598,7 @@ final class _FakeDgramSocket implements RawDatagramSocket {
     Function? onError,
     void Function()? onDone,
     bool? cancelOnError,
-  }) =>
-      _NeverEventsSubscription();
+  }) => _NeverEventsSubscription();
 
   @override
   Datagram? receive() => null;

@@ -71,6 +71,7 @@ final class DiscoveryCandidate {
     this.lastSeenByChannel = const {},
     this.macSuffix,
     this.modelHint,
+    this.host,
     this.signal,
   });
 
@@ -79,6 +80,12 @@ final class DiscoveryCandidate {
 
   /// 设备规范主 MAC 后 6 位十六进制大写；负载不可靠时为 null。
   final String? macSuffix;
+
+  /// LAN address as announced (CT-Disc beacon `ip`); null for the radio
+  /// channels. The announced port field is unreliable (devices report a
+  /// loopback-bound local port), so only the address flows — consumers
+  /// pick the port for the surface they open (device console/API = 443).
+  final String? host;
 
   /// 已知型号名（未知型号为 null，仍应展示并允许连接）。
   final String? modelHint;
@@ -109,6 +116,7 @@ final class DiscoveryCandidate {
   DiscoveryCandidate copyWith({
     String? macSuffix,
     String? modelHint,
+    String? host,
     Set<DiscoveryChannel>? channels,
     bool? provisionable,
     bool? busy,
@@ -120,6 +128,7 @@ final class DiscoveryCandidate {
         candidateId: candidateId,
         macSuffix: macSuffix ?? this.macSuffix,
         modelHint: modelHint ?? this.modelHint,
+        host: host ?? this.host,
         channels: channels ?? this.channels,
         provisionable: provisionable ?? this.provisionable,
         busy: busy ?? this.busy,
@@ -207,9 +216,9 @@ final class DiscoveryRegistry {
       (candidate.macSuffix ?? candidate.candidateId).toUpperCase();
 
   /// 合并规则：candidateId/macSuffix/modelHint 取首见非空值；channels
-  /// 并集；lastSeen 取较晚；signal 取最近非空；busy 与 provisionable
-  /// 跟随最近一条记录（忙时强制不可配置，§4.2.2）。跨通道标志仲裁
-  /// 待 AP / CT-Disc 接入时再定义。
+  /// 并集；lastSeen 取较晚；signal/host 取最近非空（host 可随 DHCP 变
+  /// 更，不按首见冻结）；busy 与 provisionable 跟随最近一条记录（忙时
+  /// 强制不可配置，§4.2.2）。跨通道标志仲裁待 AP / CT-Disc 接入时再定义。
   DiscoveryCandidate _merge(
     DiscoveryCandidate older,
     DiscoveryCandidate newer,
@@ -217,6 +226,7 @@ final class DiscoveryRegistry {
       older.copyWith(
         macSuffix: older.macSuffix ?? newer.macSuffix,
         modelHint: older.modelHint ?? newer.modelHint,
+        host: newer.host ?? older.host,
         channels: <DiscoveryChannel>{...older.channels, ...newer.channels},
         busy: newer.busy,
         provisionable: newer.busy ? false : newer.provisionable,
