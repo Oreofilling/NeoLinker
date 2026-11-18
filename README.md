@@ -6,7 +6,7 @@
 
 # NeoLinker
 
-[![CI](https://github.com/Oreofilling/NeoLinker/actions/workflows/ci.yml/badge.svg)](https://github.com/Oreofilling/NeoLinker/actions/workflows/ci.yml)
+[![CI](https://github.com/camthink-ai/NeoLinker/actions/workflows/ci.yml/badge.svg)](https://github.com/camthink-ai/NeoLinker/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg?logo=apache)](LICENSE)
 
 NeoLinker is a Windows desktop tool for discovering, provisioning, and
@@ -52,7 +52,7 @@ newer.
 ## Download
 
 Grab `NeoLinker_v0.2.0_windows_x64.zip` from
-[Releases](https://github.com/Oreofilling/NeoLinker/releases), unzip, and run
+[Releases](https://github.com/camthink-ai/NeoLinker/releases), unzip, and run
 `NeoLinker.exe`. No installer.
 
 Requirements: Windows 10/11 x64, the WebView2 Evergreen runtime (preinstalled
@@ -74,7 +74,7 @@ Prerequisites:
   build time)
 
 ```bash
-git clone https://github.com/Oreofilling/NeoLinker.git
+git clone https://github.com/camthink-ai/NeoLinker.git
 cd neolinker/apps/desktop_app
 flutter pub get
 flutter gen-l10n          # regenerate localizations after ARB edits
