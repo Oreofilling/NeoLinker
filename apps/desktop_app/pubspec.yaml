@@ -1,5 +1,5 @@
 name: desktop_app
-description: NeoLinker Windows 桌面端（P0 首发参考实现入口）
+description: NeoLinker 桌面端（Windows 首发；含 macOS target）
 publish_to: none
 version: 0.3.0
 environment:

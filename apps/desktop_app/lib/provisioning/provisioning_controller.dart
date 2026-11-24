@@ -24,6 +24,7 @@ import 'package:softap_transport/softap_transport.dart';
 import '../services/device_web_opener.dart';
 import '../services/device_web_console.dart';
 import '../services/environment_probe.dart';
+import '../services/mac_wlan.dart';
 import 'section_editing.dart';
 
 /// 把桌面端环境探测与三路通道状态映射进会话状态机。
@@ -54,7 +55,9 @@ class ProvisioningController extends ChangeNotifier {
            discoverySource ??
            CompositeDiscoverySource([
              BleDiscoverySource(),
-             ApDiscoverySource(),
+             // macOS assembly enumerates device APs over the mac_wlan
+             // channel (CoreWLAN); null keeps the Windows wlanapi default.
+             ApDiscoverySource(scanner: defaultMacApScanner()),
              CtDiscDiscoverySource(),
            ]),
        _pair =

@@ -16,6 +16,7 @@ from PIL import Image, ImageDraw
 ROOT = Path(__file__).resolve().parent.parent
 ICO = ROOT / "apps/desktop_app/windows/runner/resources/app_icon.ico"
 PNG = ROOT / "design/png"
+APPICON = ROOT / "apps/desktop_app/macos/Runner/Assets.xcassets/AppIcon.appiconset"
 
 SS = 8  # 超采样倍数（抗锯齿）
 INK = (22, 24, 29, 255)           # #16181D elevated ink（砖底，比纯黑任务栏亮一档）
@@ -80,13 +81,20 @@ def main():
         ICO, format="ICO", append_images=frames[:-1], sizes=[(s, s) for s in sizes]
     )
 
-    make_mark(512, INK_LIGHT, INK_LIGHT, False).save(PNG / "neolinker-logo-512.png")
-    make_mark(512, INK_LIGHT, ACCENT_LIGHT, False).save(PNG / "neolinker-logo-accent-512.png")
-    make_tile(512, False).save(PNG / "neolinker-logo-tile-512.png")
-    make_tile(256, False).save(PNG / "neolinker-logo-tile-256.png")
+    make_mark(512, INK_LIGHT, INK_LIGHT, False).save(PNG / "neolink-logo-512.png")
+    make_mark(512, INK_LIGHT, ACCENT_LIGHT, False).save(PNG / "neolink-logo-accent-512.png")
+    make_tile(512, False).save(PNG / "neolink-logo-tile-512.png")
+    make_tile(256, False).save(PNG / "neolink-logo-tile-256.png")
+
+    # macOS asset catalog（flutter create 模板的 AppIcon.appiconset 文件名）
+    APPICON.mkdir(parents=True, exist_ok=True)
+    for s in (16, 32, 64, 128, 256, 512, 1024):
+        make_tile(s, simple=s <= 24).save(APPICON / f"app_icon_{s}.png")
 
     got = Image.open(ICO).info.get("sizes")
     print(f"ico: {ICO.relative_to(ROOT)} sizes={sorted(got or [])}")
+    for s in (16, 32, 64, 128, 256, 512, 1024):
+        print(f"appicon: {APPICON.relative_to(ROOT)}/app_icon_{s}.png")
     for f in sorted(PNG.glob("*.png")):
         print(f"png: {f.relative_to(ROOT)} {f.stat().st_size // 1024}KB")
 

@@ -6,6 +6,7 @@ import 'package:neolinker_ui/neolinker_ui.dart';
 import 'l10n/app_localizations.dart';
 import 'provisioning/provisioning_controller.dart';
 import 'services/device_web_console.dart';
+import 'services/mac_wlan.dart';
 import 'services/device_web_opener.dart';
 import 'services/host_probe.dart';
 import 'services/settings_store.dart';
@@ -62,8 +63,13 @@ class _NeoLinkerAppState extends State<NeoLinkerApp> {
     // default stays null so widget tests never touch a real WebView2.
     // Web mode therefore renders the console inside the connect page;
     // the system browser remains a manual fallback button there.
+    // macOS assembly injects the CoreWLAN joiner the same way (null on
+    // Windows, where the controller default stays WinWlanJoiner).
     _owned = widget.controller == null
-        ? ProvisioningController(webConsoleBuilder: defaultWebConsoleBuilder())
+        ? ProvisioningController(
+            apJoiner: defaultMacApJoiner(),
+            webConsoleBuilder: defaultWebConsoleBuilder(),
+          )
         : null;
     _settings = widget.settings ?? SettingsStore();
     final stored = _settings.load();

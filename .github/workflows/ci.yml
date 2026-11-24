@@ -43,3 +43,29 @@ jobs:
           name: neolinker-windows-x64
           path: apps/desktop_app/build/windows/x64/runner/Release/
           if-no-files-found: warn
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          # Same pin as the windows job (see the comment there).
+          flutter-version: 3.47.8
+          cache: true
+      # The macos job exists to compile-validate the macos target and to
+      # produce release artifacts on tags; analyze+test already ran on the
+      # windows job, but ci.sh bundles them so the runner setup stays
+      # identical across jobs.
+      - name: analyze + test + build macos (release)
+        shell: bash
+        run: bash tool/ci.sh build-macos
+      - name: upload macos build
+        if: >-
+          (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
+          (github.event_name == 'workflow_dispatch' && inputs.build)
+        uses: actions/upload-artifact@v4
+        with:
+          name: neolinker-macos-arm64
+          path: apps/desktop_app/build/macos/Build/Products/Release/*.app
+          if-no-files-found: warn
