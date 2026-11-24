@@ -104,11 +104,11 @@ enum MacWlanChannel {
     // macOS 10.15+ gates SSID scans behind Location Services. Request
     // authorization once on the notDetermined path; denied/restricted
     // surfaces as location_denied so the Dart poll reports nothing.
-    switch CWWiFiClient.authorizationState() {
+    switch CWAuthorization.authorizationStatus() {
     case .authorized:
       break
     case .notDetermined:
-      CWWiFiClient.requestAuthorization { _ in }
+      CWAuthorization.requestAccess { _ in }
       DispatchQueue.main.async {
         result(FlutterError(code: "location_denied", message: "authorization requested", details: nil))
       }
@@ -147,15 +147,17 @@ enum MacWlanChannel {
     guard !ssid.isEmpty else { return false }
     // Path 1: CoreWLAN associate. Needs the CWNetwork object, i.e. a
     // scan, i.e. location authorization; skip silently when unavailable.
-    if CWWiFiClient.authorizationState() == .authorized,
+    if CWAuthorization.authorizationStatus() == .authorized,
        let iface = client.interface(),
-       let networks = try? iface.scanForNetworks(withSSID: ssid as NSString),
+       let ssidData = ssid.data(using: .utf8),
+       let networks = try? iface.scanForNetworks(withSSID: ssidData),
        let network = networks.first(where: { $0.ssid == ssid }) {
       do {
-        if let password, !password.isEmpty {
-          return try iface.associate(toNetwork: network, password: password)
-        }
-        return try iface.associate(toNetwork: network)
+        // associate(to:password:) is void and throws on failure; success
+        // means the association command was accepted.
+        try iface.associate(
+          to: network, password: (password?.isEmpty == false) ? password : nil)
+        return true
       } catch {
         // Fall through to networksetup.
       }
@@ -178,10 +180,10 @@ enum MacWlanChannel {
   /// service "Wi-Fi" on device en0.
   static func wifiServiceAndDevice() -> (service: String, device: String) {
     let out = runTool(networksetup, ["-listallhardwareports"])
-    var blocks = out.split(separator: "\n\n").map { block -> (String, String)? in
+    var blocks = out.components(separatedBy: "\n\n").map { block -> (String, String)? in
       var service = ""
       var device = ""
-      for line in block.split(separator: "\n") {
+      for line in block.components(separatedBy: "\n") {
         if line.hasPrefix("Hardware Port:") {
           service = line.dropFirst("Hardware Port:".count).trimmingCharacters(in: .whitespaces)
         } else if line.hasPrefix("Device:") {
@@ -193,17 +195,21 @@ enum MacWlanChannel {
     }.compactMap { $0 }
     if blocks.isEmpty { blocks = [("Wi-Fi", "en0")] }
     // Prefer the airport-looking device (en*); the first block otherwise.
-    let pick = blocks.first(where: { $0.device.hasPrefix("en") }) ?? blocks[0]
+    let pick = blocks.first(where: { $0.1.hasPrefix("en") }) ?? blocks[0]
     return pick
   }
 
   static func securityName(_ network: CWNetwork) -> String {
-    if network.supportsSecurity(.none) { return "open" }
-    if network.supportsSecurity(.wpa3) { return "wpa3" }
-    if network.supportsSecurity(.wpa2) { return "wpa2" }
-    if network.supportsSecurity(.wpa) { return "wpa" }
-    if network.supportsSecurity(.wep) { return "wep" }
-    return "enterprise"
+    // CWSecurity case names drift between SDK generations; the value is
+    // informational for the Dart side, so map from the description.
+    let name = String(describing: network.security).lowercased()
+    if name.contains("none") { return "open" }
+    if name.contains("wpa3") { return "wpa3" }
+    if name.contains("wpa2") { return "wpa2" }
+    if name.contains("wpa") { return "wpa" }
+    if name.contains("wep") { return "wep" }
+    if name.contains("enterprise") { return "enterprise" }
+    return name
   }
 
   @discardableResult
