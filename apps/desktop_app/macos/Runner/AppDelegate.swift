@@ -29,7 +29,7 @@ class AppDelegate: FlutterAppDelegate {
 /// - `currentSsid` -> String? — CoreWLAN hides the current SSID without
 ///   Location Services on 10.15+, so `networksetup -getairportnetwork`
 ///   (a system tool, not location-gated) is the fallback.
-/// - `scan` -> [{ssid, rssi(dBm), security}] — requires Location Services
+/// - `scan` -> [{ssid, rssi(dBm)}] — requires Location Services
 ///   authorization; a denial raises `location_denied` and the Dart side
 ///   reports an empty pass (QR / manual entry take over).
 /// - `join` {ssid, password?} -> Bool — CoreWLAN associate when the SSID
@@ -101,44 +101,31 @@ enum MacWlanChannel {
   // MARK: - Scan
 
   static func scan(client: CWWiFiClient, result: @escaping FlutterResult) throws {
-    // macOS 10.15+ gates SSID scans behind Location Services. Request
-    // authorization once on the notDetermined path; denied/restricted
-    // surfaces as location_denied so the Dart poll reports nothing.
-    switch CWAuthorization.authorizationStatus() {
-    case .authorized:
-      break
-    case .notDetermined:
-      CWAuthorization.requestAccess { _ in }
-      DispatchQueue.main.async {
-        result(FlutterError(code: "location_denied", message: "authorization requested", details: nil))
-      }
-      return
-    case .restricted, .denied:
-      DispatchQueue.main.async {
-        result(FlutterError(code: "location_denied", message: "location access denied", details: nil))
-      }
-      return
-    @unknown default:
-      DispatchQueue.main.async {
-        result(FlutterError(code: "location_denied", message: "unknown state", details: nil))
-      }
-      return
-    }
+    // macOS 10.15+ gates SSID scans behind Location Services; the first
+    // scanForNetworks call triggers the system prompt, and a scan without
+    // authorization throws. Map that (and any other CoreWLAN refusal) to
+    // location_denied so the Dart poll reports a quiet pass and QR/manual
+    // entry take over.
     guard let iface = client.interface() else {
       DispatchQueue.main.async {
         result(FlutterError(code: "no_interface", message: "no Wi-Fi interface", details: nil))
       }
       return
     }
-    let networks = try iface.scanForNetworks(withSSID: nil)
-    let rows: [[String: Any]] = networks.map { network in
-      [
-        "ssid": network.ssid ?? "",
-        "rssi": Int(network.rssiValue),
-        "security": securityName(network),
-      ]
+    do {
+      let networks = try iface.scanForNetworks(withSSID: nil)
+      let rows: [[String: Any]] = networks.map { network in
+        [
+          "ssid": network.ssid ?? "",
+          "rssi": Int(network.rssiValue),
+        ]
+      }
+      DispatchQueue.main.async { result(rows) }
+    } catch {
+      DispatchQueue.main.async {
+        result(FlutterError(code: "location_denied", message: "\(error)", details: nil))
+      }
     }
-    DispatchQueue.main.async { result(rows) }
   }
 
   // MARK: - Join
@@ -147,8 +134,7 @@ enum MacWlanChannel {
     guard !ssid.isEmpty else { return false }
     // Path 1: CoreWLAN associate. Needs the CWNetwork object, i.e. a
     // scan, i.e. location authorization; skip silently when unavailable.
-    if CWAuthorization.authorizationStatus() == .authorized,
-       let iface = client.interface(),
+    if let iface = client.interface(),
        let ssidData = ssid.data(using: .utf8),
        let networks = try? iface.scanForNetworks(withSSID: ssidData),
        let network = networks.first(where: { $0.ssid == ssid }) {
@@ -197,19 +183,6 @@ enum MacWlanChannel {
     // Prefer the airport-looking device (en*); the first block otherwise.
     let pick = blocks.first(where: { $0.1.hasPrefix("en") }) ?? blocks[0]
     return pick
-  }
-
-  static func securityName(_ network: CWNetwork) -> String {
-    // CWSecurity case names drift between SDK generations; the value is
-    // informational for the Dart side, so map from the description.
-    let name = String(describing: network.security).lowercased()
-    if name.contains("none") { return "open" }
-    if name.contains("wpa3") { return "wpa3" }
-    if name.contains("wpa2") { return "wpa2" }
-    if name.contains("wpa") { return "wpa" }
-    if name.contains("wep") { return "wep" }
-    if name.contains("enterprise") { return "enterprise" }
-    return name
   }
 
   @discardableResult

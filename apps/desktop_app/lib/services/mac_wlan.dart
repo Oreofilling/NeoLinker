@@ -6,7 +6,7 @@
 ///
 /// Channel contract (see macos/Runner/AppDelegate.swift):
 /// - `currentSsid` -> String? (null when not associated)
-/// - `scan` -> List<{ssid: String, rssi: int (dBm), security: String}> or
+/// - `scan` -> List<{ssid: String, rssi: int (dBm)}> or
 ///   PlatformException `no_interface` / `location_denied`
 /// - `join` {ssid, password?} -> bool (CoreWLAN associate, falling back to
 ///   `networksetup -setairportNetwork`)
