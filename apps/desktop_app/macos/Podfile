@@ -35,6 +35,20 @@ target 'Runner' do
   end
 end
 
+pre_install do |installer|
+  # flutter_inappwebview_macos 1.2.0-beta.3 declares osx 10.14 in its
+  # podspec but compiles ASWebAuthenticationSession conformances that
+  # need 10.15+; CocoaPods derives each pod's deployment target from the
+  # podspec, so retarget it before integration (post_install build
+  # settings alone did not reach the Swift availability checker).
+  installer.pod_targets.each do |pod|
+    next unless pod.name == 'flutter_inappwebview_macos'
+    def pod.platform
+      Pod::Platform.new(:osx, '12.0')
+    end
+  end
+end
+
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_macos_build_settings(target)
