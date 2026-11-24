@@ -4,13 +4,15 @@
 #           for every package
 #   build — everything in `check`, plus the desktop_app Windows release
 #           build
-# The windows/ runner is committed (custom app_icon.ico included), so no
-# bootstrap step is needed.
+#   build-macos — everything in `check`, plus the desktop_app macOS
+#           release build (the macos/ runner is committed like windows/)
+# The windows/ and macos/ runners are committed (custom icons included),
+# so no bootstrap step is needed.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 MODE="${1:-check}"
-if [ "$MODE" != "check" ] && [ "$MODE" != "build" ]; then
-  echo "usage: $0 [check|build]" >&2
+if [ "$MODE" != "check" ] && [ "$MODE" != "build" ] && [ "$MODE" != "build-macos" ]; then
+  echo "usage: $0 [check|build|build-macos]" >&2
   exit 2
 fi
 FAIL=0
@@ -24,5 +26,9 @@ done
 if [ "$MODE" = "build" ]; then
   echo "== apps/desktop_app: build windows (release) =="
   (cd apps/desktop_app && flutter build windows --release) || FAIL=1
+fi
+if [ "$MODE" = "build-macos" ]; then
+  echo "== apps/desktop_app: build macos (release) =="
+  (cd apps/desktop_app && flutter build macos --release) || FAIL=1
 fi
 exit $FAIL

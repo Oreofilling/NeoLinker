@@ -10,15 +10,21 @@ import 'dart:io';
 /// succeeded (the browser owns everything after that).
 typedef DeviceWebOpener = Future<bool> Function(Uri url);
 
-/// Opens [url] through cmd `start`. Non-Windows always reports false —
-/// the desktop app is Windows-first (P0).
+/// Opens [url] in the default browser: cmd `start` on Windows, `open` on
+/// macOS. Other platforms report false (no shell opener wired yet).
 Future<bool> openDeviceWebPage(Uri url) async {
-  if (!Platform.isWindows) return false;
-  final result = await Process.run('cmd', [
-    '/c',
-    'start',
-    '',
-    url.toString(),
-  ]);
-  return result.exitCode == 0;
+  if (Platform.isWindows) {
+    final result = await Process.run('cmd', [
+      '/c',
+      'start',
+      '',
+      url.toString(),
+    ]);
+    return result.exitCode == 0;
+  }
+  if (Platform.isMacOS) {
+    final result = await Process.run('open', [url.toString()]);
+    return result.exitCode == 0;
+  }
+  return false;
 }

@@ -10,15 +10,24 @@ import 'dart:io';
 /// command succeeded.
 typedef WifiSettingsOpener = Future<bool> Function();
 
-/// Opens `ms-settings:network-wifi` through cmd `start`. Non-Windows
-/// always reports false — there is no page to open.
+/// Opens the system Wi-Fi settings page: `ms-settings:network-wifi` on
+/// Windows, the Network preference pane on macOS. Other platforms report
+/// false.
 Future<bool> openWifiSettings() async {
-  if (!Platform.isWindows) return false;
-  final result = await Process.run('cmd', const [
-    '/c',
-    'start',
-    '',
-    'ms-settings:network-wifi',
-  ]);
-  return result.exitCode == 0;
+  if (Platform.isWindows) {
+    final result = await Process.run('cmd', const [
+      '/c',
+      'start',
+      '',
+      'ms-settings:network-wifi',
+    ]);
+    return result.exitCode == 0;
+  }
+  if (Platform.isMacOS) {
+    final result = await Process.run('open', const [
+      '/System/Library/PreferencePanes/Network.prefPane',
+    ]);
+    return result.exitCode == 0;
+  }
+  return false;
 }
