@@ -4,6 +4,8 @@
 // WinWlanJoiner there is no on-box smoke round for this code path yet).
 library;
 
+import 'dart:io' show Platform;
+
 import 'package:ap_discovery_adapter/ap_discovery_adapter.dart';
 import 'package:desktop_app/services/mac_wlan.dart';
 import 'package:flutter/services.dart';
@@ -97,13 +99,20 @@ void main() {
       expect(await empty.capture(), isNull);
     });
 
-    test('inert off macOS: no channel calls, null result', () async {
+    test('platform default engages the channel only on macOS hosts',
+        () async {
       var called = false;
       final joiner = MacWlanJoiner(
-        runner: _router({}, (_) { called = true; }),
+        runner: _router({
+          'currentSsid': (_) {
+            called = true;
+            return null;
+          },
+        }),
       );
       expect(await joiner.capture(), isNull);
-      expect(called, isFalse);
+      expect(called, Platform.isMacOS,
+          reason: 'channel engaged only on macOS hosts');
     });
   });
 
@@ -191,16 +200,21 @@ void main() {
       );
     });
 
-    test('refuses with no_wlan_interface off macOS, no channel calls',
+    test('platform default: engages on macOS, refuses with no_wlan_interface otherwise',
         () async {
-      var called = false;
-      final joiner = MacWlanJoiner(runner: _router({}, (_) { called = true; }));
+      final joiner = MacWlanJoiner(runner: _router({
+        'join': (_) => false,
+        'currentSsid': (_) => 'NE101_2001CA',
+      }));
+      // On a macOS CI host the default joiner engages the channel (the
+      // scripted join refuses); everywhere else it refuses early.
+      final expectedCode =
+          Platform.isMacOS ? kJoinConnectFailed : kJoinNoInterface;
       await expectLater(
         joiner.join('NE101_2001CA'),
-        throwsA(isA<ApJoinException>().having(
-            (e) => e.codeName, 'code', kJoinNoInterface)),
+        throwsA(isA<ApJoinException>()
+            .having((e) => e.codeName, 'code', expectedCode)),
       );
-      expect(called, isFalse);
     });
   });
 
@@ -248,21 +262,26 @@ void main() {
       );
     });
 
-    test('inert off macOS', () async {
-      var called = false;
-      final joiner = MacWlanJoiner(runner: _router({}, (_) { called = true; }));
+    test('platform default: restore engages only on macOS hosts', () async {
+      final calls = <String>[];
+      final joiner = MacWlanJoiner(runner: _router({
+        'join': (_) => true,
+        'disconnect': (_) => true,
+      }, calls.add));
       await joiner.restore(
           const WlanRestorePoint(ssid: 'TP-LINK-5G', profileName: 'TP-LINK-5G'));
-      expect(called, isFalse);
+      expect(calls, Platform.isMacOS ? ['join'] : isEmpty);
     });
   });
 
   group('assembly defaults', () {
-    // The suite never runs on macOS, so both factories report their
-    // off-platform value here: null keeps the Windows wlanapi default.
-    test('defaultMacApJoiner and scanner are null off macOS', () {
-      expect(defaultMacApJoiner(), isNull);
-      expect(defaultMacApScanner(), isNull);
+    // The suite runs on Windows/Linux/macOS CI hosts alike: the factories
+    // must follow the host (engaged on macOS; null keeps the Windows
+    // wlanapi default everywhere else).
+    test('defaultMacApJoiner and scanner follow the host platform', () {
+      expect(defaultMacApJoiner(),
+          Platform.isMacOS ? isA<MacWlanJoiner>() : isNull);
+      expect(defaultMacApScanner(), Platform.isMacOS ? isNotNull : isNull);
     });
   });
 }
