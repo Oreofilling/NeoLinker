@@ -54,7 +54,8 @@ final Map<String, int> _modelNameToCode = {
 /// Service Data 的支持不全）时，用 Scan Response 名字推导身份。
 /// mac_suffix/model 段来自名字本身，广播负载字段（format_version/
 /// flags/busy）未知，以 payloadFieldsReliable=false 标注。名字不合规
-/// 返回 null。
+/// 返回 null。型号段**无需在注册表中**——modelCodeName 直接取名字里的
+/// 型号段（modelCode 仍为 null，诚实标注未注册）。
 CtDiscoveredDevice? ctInfoFromName(String? name) {
   if (name == null) return null;
   final match = _ctNamePattern.firstMatch(name);
@@ -67,10 +68,34 @@ CtDiscoveredDevice? ctInfoFromName(String? name) {
     formatVersionSupported: true,
     payloadFieldsReliable: false,
     modelCode: modelCode,
-    modelCodeName: modelCode == null ? null : model,
+    modelCodeName: model,
     macSuffix: macSuffix,
     advertisedName: name,
     displayName: name,
     nameSource: NameSource.scanResponse,
+  );
+}
+
+/// 展示补全：Service Data 已解析（负载字段可靠）但 model_code 不在
+/// 注册表（modelCodeName 为 null）时，若 §4.2.3 名字合规，则采用名字
+/// 中的型号段作为展示型号——注册表滞后不应让命名规范的设备显示
+/// "未知型号"。返回补全后的新实例；无需补全或名字不合规时原样返回。
+CtDiscoveredDevice fillModelFromName(CtDiscoveredDevice info, String? name) {
+  if (info.modelCodeName != null) return info;
+  final byName = ctInfoFromName(name);
+  if (byName == null) return info;
+  return CtDiscoveredDevice(
+    formatVersion: info.formatVersion,
+    formatVersionSupported: info.formatVersionSupported,
+    payloadFieldsReliable: info.payloadFieldsReliable,
+    modelCode: info.modelCode,
+    modelCodeName: byName.modelCodeName,
+    macSuffix: info.macSuffix,
+    busy: info.busy,
+    provisionable: info.provisionable,
+    advertisedName: info.advertisedName,
+    displayName: info.displayName,
+    nameSource: info.nameSource,
+    nameInvalid: info.nameInvalid,
   );
 }

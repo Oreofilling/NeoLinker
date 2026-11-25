@@ -86,11 +86,12 @@ void main() {
       expect(info.provisionable, isNull);
     });
 
-    test('unknown model keeps the name but drops the code', () {
+    test('unregistered model still surfaces the model segment', () {
       final info = ctInfoFromName('XY-112233');
       expect(info, isNotNull);
       expect(info!.modelCode, isNull);
-      expect(info.modelCodeName, isNull);
+      // 展示取名字型号段；注册与否由 modelCode 表达。
+      expect(info.modelCodeName, 'XY');
       expect(info.macSuffix, '112233');
       expect(info.displayName, 'XY-112233');
     });
@@ -105,6 +106,43 @@ void main() {
       expect(ctInfoFromName('N-BBC6DC'), isNull); // MODEL 过短
       expect(ctInfoFromName('NE101BBC6DC'), isNull); // 缺连字符
       expect(ctInfoFromName('NE101-P-BBC6DC'), isNull); // 双连字符
+    });
+  });
+
+  group('fillModelFromName', () {
+    // Service Data 解析成功但 model_code 未注册的形态（负载字段可靠）。
+    CtDiscoveredDevice parsedWithUnknownCode() {
+      final adv = <int>[
+        0x02, 0x01, 0x06, 0x17, 0x21, ...kCtProvServiceUuidLe, //
+        0x01, 0x3C, 0xA1, 0xB2, 0xC3, 0x02,
+      ];
+      final info = parseAdvertisingData(adv)!;
+      expect(info.modelCodeName, isNull);
+      return info;
+    }
+
+    test('fills the display model from a conforming name', () {
+      final filled = fillModelFromName(parsedWithUnknownCode(), 'EK410-A1B2C3');
+      expect(filled.modelCodeName, 'EK410');
+      // 负载字段仍以 Service Data 为准。
+      expect(filled.modelCode, 0x3C);
+      expect(filled.macSuffix, 'A1B2C3');
+      expect(filled.payloadFieldsReliable, isTrue);
+    });
+
+    test('leaves records with a known model untouched', () {
+      final adv = <int>[
+        0x02, 0x01, 0x06, 0x17, 0x21, ...kCtProvServiceUuidLe, //
+        0x01, 0x01, 0xA1, 0xB2, 0xC3, 0x02,
+      ];
+      final info = parseAdvertisingData(adv)!;
+      expect(identical(fillModelFromName(info, 'EK410-A1B2C3'), info), isTrue);
+    });
+
+    test('leaves records with a non-conforming name untouched', () {
+      final info = parsedWithUnknownCode();
+      expect(identical(fillModelFromName(info, null), info), isTrue);
+      expect(identical(fillModelFromName(info, 'random'), info), isTrue);
     });
   });
 }
