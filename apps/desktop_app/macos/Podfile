@@ -69,21 +69,30 @@ post_install do |installer|
                  "    public func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {\n" \
                  "        return NSApplication.shared.windows.first { $0.isKeyWindow } ?? ASPresentationAnchor()\n" \
                  "    }\n"
-    patched = body
-      .gsub("public class WebAuthenticationSession: NSObject, ASWebAuthenticationPresentationContextProviding, Disposable {",
-            helper + "public class WebAuthenticationSession: NSObject, Disposable {")
-      .gsub("    private var _canStart = true",
-            "    private var _canStart = true\n" \
-            "    // keep reference\n" \
-            "    private var _presentationContextProvider: Any?")
-      .gsub("            session.presentationContextProvider = self",
-            "            let provider = WebAuthenticationPresentationContextProviding()\n" \
-            "            self._presentationContextProvider = provider\n" \
-            "            session.presentationContextProvider = provider")
-      .gsub(old_method, "")
-    if patched != body
-      File.write(target_file, patched)
-      Pod::UI.puts "Patched #{target_file}"
+    if body.include?('_presentationContextProvider')
+      # Idempotence guard: pod install runs more than once per CI job
+      # (Flutter re-invokes it around the SPM/xcodebuild passes) against
+      # the same pub cache, and the _canStart gsub below would inject a
+      # duplicate declaration on every pass — clang then fails with
+      # "invalid redeclaration of '_presentationContextProvider'".
+      Pod::UI.puts "Already patched #{target_file}"
+    else
+      patched = body
+        .gsub("public class WebAuthenticationSession: NSObject, ASWebAuthenticationPresentationContextProviding, Disposable {",
+              helper + "public class WebAuthenticationSession: NSObject, Disposable {")
+        .gsub("    private var _canStart = true",
+              "    private var _canStart = true\n" \
+              "    // keep reference\n" \
+              "    private var _presentationContextProvider: Any?")
+        .gsub("            session.presentationContextProvider = self",
+              "            let provider = WebAuthenticationPresentationContextProviding()\n" \
+              "            self._presentationContextProvider = provider\n" \
+              "            session.presentationContextProvider = provider")
+        .gsub(old_method, "")
+      if patched != body
+        File.write(target_file, patched)
+        Pod::UI.puts "Patched #{target_file}"
+      end
     end
   end
 end
