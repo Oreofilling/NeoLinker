@@ -140,6 +140,7 @@ final class MacWlanJoiner implements ApJoiner {
     Duration? timeout,
     String gatewayHost = '192.168.1.1',
     int gatewayPort = 80,
+    String? password,
     void Function(String step)? onStep,
   }) async {
     if (!_enabled) {
@@ -149,7 +150,12 @@ final class MacWlanJoiner implements ApJoiner {
 
     onStep?.call('requesting association');
     try {
-      final ok = await _runner('join', {'ssid': ssid}) as bool? ?? false;
+      final ok = await _runner('join', {
+        'ssid': ssid,
+        // Native side (AppDelegate.join) already accepts a password; null
+        // keeps the open-network path.
+        if (password != null) 'password': password,
+      }) as bool? ?? false;
       if (!ok) {
         throw const ApJoinException(
           kJoinConnectFailed,

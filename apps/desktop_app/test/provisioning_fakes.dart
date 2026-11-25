@@ -531,6 +531,9 @@ final class FakeApJoiner implements ApJoiner {
 
   Object? joinError;
 
+  /// Per-join resolved passphrase (null = open AP), parallel to [joins].
+  final passwords = <String?>[];
+
   @override
   Future<WlanRestorePoint?> capture() async => captureResult;
 
@@ -540,10 +543,12 @@ final class FakeApJoiner implements ApJoiner {
     Duration? timeout,
     String gatewayHost = '192.168.1.1',
     int gatewayPort = 80,
+    String? password,
     void Function(String step)? onStep,
   }) async {
     joins.add(ssid);
     gatewayHosts.add(gatewayHost);
+    passwords.add(password);
     final error = joinError;
     if (error != null) throw error;
     onStep?.call('waiting gateway');

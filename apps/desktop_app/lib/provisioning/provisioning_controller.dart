@@ -548,8 +548,10 @@ class ProvisioningController extends ChangeNotifier {
     try {
       // Per-model softAP address: the HTTP binding sits on the device's
       // own AP address (NE101 192.168.1.1 / NE301 192.168.10.10 / NE503
-      // 10.0.0.1). Resolved from the row's model hint; rows without one
-      // (CT-AP-* SSIDs) fall back to the NE101 reference address.
+      // 10.0.0.1 / EK410 192.168.4.1). Resolved from the row's model hint;
+      // rows without one (CT-AP-* SSIDs) fall back to the NE101 reference
+      // address. Models with a shipped WPA2 passphrase (EK410) get it
+      // resolved the same way; others join open.
       final endpoint = softapEndpointForHost(
         softapHostForModel(candidate.modelHint),
       );
@@ -564,6 +566,7 @@ class ProvisioningController extends ChangeNotifier {
         ssid,
         gatewayHost: endpoint.host,
         gatewayPort: endpoint.port,
+        password: softapPasswordForModel(candidate.modelHint),
         onStep: onStep,
       );
       if (_machine.phase != SessionPhase.connecting) return;
@@ -774,7 +777,8 @@ class ProvisioningController extends ChangeNotifier {
           throw const ApJoinException(kJoinNoInterface, 'not an AP candidate');
         }
         // Same per-model address resolution as the first connect (see
-        // _connectChainOverSoftAp).
+        // _connectChainOverSoftAp), including the model's softAP
+        // passphrase when it ships one.
         final endpoint = softapEndpointForHost(
           softapHostForModel(candidate.modelHint),
         );
@@ -782,6 +786,7 @@ class ProvisioningController extends ChangeNotifier {
           ssid,
           gatewayHost: endpoint.host,
           gatewayPort: endpoint.port,
+          password: softapPasswordForModel(candidate.modelHint),
         );
         // The drop's release already consumed the restore flag while the
         // captured point stays the true target — re-arm so the eventual

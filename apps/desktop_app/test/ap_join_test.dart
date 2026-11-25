@@ -238,6 +238,50 @@ void main() {
       expect(joiner.gatewayHosts, ['192.168.10.10']);
     });
 
+    test('EK410 行：地址与 WPA2 密码按型号解析', () async {
+      final source = FakeSource();
+      final joiner = FakeApJoiner();
+      final transport = FakeApTransport();
+      final openedUrls = <Uri>[];
+      final controller = await wiredAp(
+        source,
+        joiner,
+        transport,
+        webPageOpener: (url) async {
+          openedUrls.add(url);
+          return true;
+        },
+      );
+
+      final ek410 = DiscoveryCandidate(
+        candidateId: 'ap:EK410_A1B2C3',
+        macSuffix: 'A1B2C3',
+        modelHint: 'EK410',
+        channels: const {DiscoveryChannel.accessPoint},
+        provisionable: true,
+        busy: false,
+        lastSeen: DateTime.now(),
+      );
+      source.emit(ek410);
+      await until(
+        () => controller.candidates.any((c) => c.candidateId == ek410.candidateId),
+        'EK410 candidate did not surface',
+      );
+      await controller.selectCandidate(
+        controller.candidates
+            .firstWhere((c) => c.candidateId == ek410.candidateId),
+        viaWeb: true,
+      );
+      await until(
+        () => controller.phase == SessionPhase.webBrowsing,
+        'web mode did not reach webBrowsing',
+      );
+      expect(openedUrls, [Uri.parse('http://192.168.4.1/')]);
+      expect(joiner.gatewayHosts, ['192.168.4.1']);
+      // EK410 ships a WPA2-PSK softAP: the joiner must see the passphrase.
+      expect(joiner.passwords, ['12345678']);
+    });
+
     test('浏览器启动失败 → webBrowsing 保持，重新打开翻正', () async {
       final source = FakeSource();
       final joiner = FakeApJoiner();

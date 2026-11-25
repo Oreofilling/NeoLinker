@@ -36,6 +36,13 @@ void main() {
       expect(parseApSsid('NE503C_A1B2C3')?.modelHint, 'NE503C');
     });
 
+    test('EK410 underscore SSID yields the EK410 model hint', () {
+      // EK410 firmware (wifi.c): EK410_<MAC6>, uppercase hex suffix.
+      final info = parseApSsid('EK410_A1B2C3');
+      expect(info?.macSuffix, 'A1B2C3');
+      expect(info?.modelHint, 'EK410');
+    });
+
     test('non-device SSIDs are rejected', () {
       for (final ssid in [
         'Office-2.4G',
@@ -204,6 +211,7 @@ void main() {
       expect(softapHostForModel('NE101'), '192.168.1.1');
       expect(softapHostForModel('NE301'), '192.168.10.10');
       expect(softapHostForModel('NE503'), '10.0.0.1');
+      expect(softapHostForModel('EK410'), '192.168.4.1');
     });
 
     test('family-prefixed sub-models keep their family address', () {
@@ -222,6 +230,23 @@ void main() {
         kApDefaultHostByModel.keys.toSet(),
         kApModelPrefixes.toSet(),
       );
+    });
+  });
+
+  // Model -> softAP passphrase pins. Families absent from the password
+  // table run open APs; EK410 ships WPA2-PSK with its printed default.
+  group('softapPasswordForModel (per-family passphrases)', () {
+    test('EK410 resolves its shipped WPA2 passphrase', () {
+      expect(softapPasswordForModel('EK410'), '12345678');
+      expect(softapPasswordForModel('EK410-A1B2C3'), '12345678');
+    });
+
+    test('open-AP families and unknown hints resolve to null', () {
+      expect(softapPasswordForModel('NE101'), isNull);
+      expect(softapPasswordForModel('NE301'), isNull);
+      expect(softapPasswordForModel('NE503'), isNull);
+      expect(softapPasswordForModel(null), isNull);
+      expect(softapPasswordForModel('SOMEBRAND'), isNull);
     });
   });
 }

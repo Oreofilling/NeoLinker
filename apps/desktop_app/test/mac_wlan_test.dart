@@ -143,6 +143,51 @@ void main() {
       ]);
     });
 
+    test('password is forwarded to the native join channel', () async {
+      final joinArgs = <Map<Object?, Object?>>[];
+      final joiner = MacWlanJoiner(
+        runner: _router({
+          'join': (args) {
+            joinArgs.add(args);
+            return true;
+          },
+          'currentSsid': (_) => 'EK410_A1B2C3',
+        }),
+        probeGateway: (_, __) async => true,
+        enabled: true,
+      );
+      await joiner.join(
+        'EK410_A1B2C3',
+        gatewayHost: '192.168.4.1',
+        gatewayPort: 80,
+        password: '12345678',
+      );
+      expect(joinArgs, hasLength(1));
+      expect(joinArgs.single['ssid'], 'EK410_A1B2C3');
+      expect(joinArgs.single['password'], '12345678');
+    });
+
+    test('open networks omit the password argument entirely', () async {
+      final joinArgs = <Map<Object?, Object?>>[];
+      final joiner = MacWlanJoiner(
+        runner: _router({
+          'join': (args) {
+            joinArgs.add(args);
+            return true;
+          },
+          'currentSsid': (_) => 'NE101_2001CA',
+        }),
+        probeGateway: (_, __) async => true,
+        enabled: true,
+      );
+      await joiner.join(
+        'NE101_2001CA',
+        gatewayHost: '192.168.1.1',
+        gatewayPort: 80,
+      );
+      expect(joinArgs.single.containsKey('password'), isFalse);
+    });
+
     test('refused association maps to join_connect_failed', () async {
       final joiner = MacWlanJoiner(
         runner: _router({'join': (_) => false}),

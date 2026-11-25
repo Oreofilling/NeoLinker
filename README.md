@@ -44,6 +44,7 @@ export. The UI is bilingual (English / 中文) with light and dark themes.
 | NE101  | ✅ | ✅ | — | Primary target; BLE leg field-tested end to end |
 | NE301  | 🚧 | ✅ | — | SoftAP first; BLE planned. Comm-module config (Wi-Fi / cellular / MQTT / webhook) |
 | NE503  | — | — | ✅ | Discovery + embedded management console; newest, least field-tested leg |
+| EK410  | ✅ | ✅ | — | E-ink display endpoint (ESP32-C61, firmware 1.3.10+); softAP ships WPA2-PSK; not yet field-tested with NeoLinker |
 
 Field testing so far has focused on NE101. NE301 currently provisions over
 softAP only — BLE support is planned but not available yet; NE503 support is

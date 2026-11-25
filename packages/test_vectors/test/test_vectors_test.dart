@@ -198,8 +198,8 @@ void main() {
   });
 
   test('向量族数量与 id 唯一性', () {
-    expect(kAdvertisingVectors.length, 8);
-    expect(kNameVectors.length, 5);
+    expect(kAdvertisingVectors.length, 9);
+    expect(kNameVectors.length, 6);
     expect(kMetaVectors.length, 3);
     expect(kFragmentVectors.length, 12);
     expect(kEnvelopeVectors.length, 32);

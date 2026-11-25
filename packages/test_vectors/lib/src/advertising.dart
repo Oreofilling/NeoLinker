@@ -101,6 +101,19 @@ final List<AdvertisingVector> kAdvertisingVectors = [
     },
   ),
   AdvertisingVector(
+    id: 'adv-ek410',
+    description: 'EK410 型号码（EK410 固件 ct_prov.h CT_PROV_MODEL_CODE）/ A1B2C3 / PROVISIONABLE',
+    advData: _adv(formatVersion: 0x01, modelCode: 0x03, macSuffix: [0xA1, 0xB2, 0xC3], flags: 0x02),
+    expect: {
+      'formatVersion': 1,
+      'modelCode': 0x03,
+      'modelCodeName': 'EK410',
+      'macSuffix': 'A1B2C3',
+      'busy': false,
+      'provisionable': true,
+    },
+  ),
+  AdvertisingVector(
     id: 'adv-unknown-model',
     description: '未知 model_code=0x3C：不隐藏不拒绝，仍解析 mac_suffix 并允许连接',
     advData: _adv(formatVersion: 0x01, modelCode: 0x3C, macSuffix: [0xA1, 0xB2, 0xC3], flags: 0x02),
@@ -185,6 +198,12 @@ final List<NameVector> kNameVectors = [
     description: '协议 §4.2.3 示例逐字节：NE101-A1B2C3（12B）',
     scanResponse: _scanRsp('NE101-A1B2C3'),
     expect: {'name': 'NE101-A1B2C3', 'modelPrefix': 'NE101', 'macSuffix': 'A1B2C3'},
+  ),
+  NameVector(
+    id: 'name-ek410',
+    description: 'EK410 广播名（ct_prov.c：EK410-<MAC6> 连字符形态）',
+    scanResponse: _scanRsp('EK410-A1B2C3'),
+    expect: {'name': 'EK410-A1B2C3', 'modelPrefix': 'EK410', 'macSuffix': 'A1B2C3'},
   ),
   NameVector(
     id: 'name-min-9',
