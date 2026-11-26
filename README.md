@@ -51,7 +51,7 @@ newer.
 
 ## Download
 
-Grab `NeoLinker_v0.2.0_windows_x64.zip` from
+Grab the latest `NeoLinker_v*_windows_x64.zip` from
 [Releases](https://github.com/camthink-ai/NeoLinker/releases), unzip, and run
 `NeoLinker.exe`. No installer.
 

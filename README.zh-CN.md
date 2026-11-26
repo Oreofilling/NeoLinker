@@ -39,8 +39,8 @@ NE503 支持较新。
 
 ## 下载
 
-从 [Releases](https://github.com/camthink-ai/NeoLinker/releases) 下载
-`NeoLinker_v0.2.0_windows_x64.zip`，解压后直接运行 `NeoLinker.exe`，无需安装。
+从 [Releases](https://github.com/camthink-ai/NeoLinker/releases) 下载最新的
+`NeoLinker_v*_windows_x64.zip`，解压后直接运行 `NeoLinker.exe`，无需安装。
 
 运行要求：Windows 10/11 x64、WebView2 Evergreen 运行时（Win11 及多数已更新
 的 Win10 自带）、BLE 通道需要蓝牙适配器。
