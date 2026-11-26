@@ -13,9 +13,13 @@ class QrViewfinderBrackets extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.nl;
-    return CustomPaint(
-      painter: _BracketPainter(color: c.ring),
-      size: Size.infinite,
+    // Decoration only: a CustomPaint with a painter absorbs pointer events,
+    // which would shield the scanner surface underneath. Let taps through.
+    return IgnorePointer(
+      child: CustomPaint(
+        painter: _BracketPainter(color: c.ring),
+        size: Size.infinite,
+      ),
     );
   }
 }
