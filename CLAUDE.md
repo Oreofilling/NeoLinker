@@ -53,5 +53,9 @@ CI runs analyze + test + a release build for every package on each push
 - Session phases (connect → capabilities → configure → deliver → receipt):
   `packages/provisioning_session`.
 - Config-section schemas and validation: `packages/communication_domain`.
-- Windows is the only supported platform; do not add platform branches for
-  others without a plan to test them.
+- Windows is the supported platform; macOS is experimental (it passes CI
+  but has never been run on hardware). Do not add platform branches for
+  others without a plan to test them. CI runs the suite on both a Windows
+  and a macOS runner, so platform-specific code needs an injectable seam
+  and host-aware tests (`apps/desktop_app/test/mac_wlan_test.dart` shows
+  the pattern).
