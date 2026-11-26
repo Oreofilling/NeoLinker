@@ -68,7 +68,7 @@ msix_config:
   display_name: NeoLinker
   publisher_name: camthink-ai
   identity_name: NeoLinker
-  msix_version: 0.2.0.0
+  msix_version: 0.3.0.0
   architecture: x64
   capabilities: bluetooth,webcam
   build_windows: false
