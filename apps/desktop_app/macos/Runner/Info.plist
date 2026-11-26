@@ -34,5 +34,13 @@
 	<string>NeoLinker uses the camera to scan the QR code printed on the device.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>NeoLinker talks to NE-series cameras on the local network to read and change their configuration.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<!-- The embedded device console (WKWebView) loads the softAP gateway
+		     over plain http on a LAN address. Scoped to local networking;
+		     the app's own HTTP (dart:io) is not subject to ATS. -->
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 </dict>
 </plist>

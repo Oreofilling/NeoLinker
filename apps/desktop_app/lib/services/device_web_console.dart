@@ -16,17 +16,36 @@ import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 import '../l10n/app_localizations.dart';
+import 'device_web_opener.dart';
 
 /// Builds the embedded console surface for [url]. Null from
 /// [defaultWebConsoleBuilder] means "embed unavailable" and the caller
 /// falls back to the browser hold panel.
 typedef WebConsoleBuilder = Widget Function(Uri url);
 
-/// Production builder: Windows-only. Other platforms return null and web
-/// mode keeps the system-browser behavior.
+/// Production builder for Windows (WebView2) and macOS (WKWebView). Other
+/// platforms return null and web mode keeps the system-browser behavior.
 WebConsoleBuilder? defaultWebConsoleBuilder() {
-  if (!Platform.isWindows) return null;
+  if (!Platform.isWindows && !Platform.isMacOS) return null;
   return (url) => DeviceWebConsole(url: url);
+}
+
+/// Decides a server-trust (certificate) challenge raised while loading the
+/// device console: the host of the console URL we opened ourselves is
+/// trusted — device consoles ship self-signed certificates by design — and
+/// anything else (a redirect, a foreign host) fails closed. This is the
+/// macOS counterpart of the Windows environment's
+/// `--ignore-certificate-errors`, scoped to that one host.
+ServerTrustAuthResponse serverTrustResponseFor(
+  Uri url,
+  ServerTrustChallenge challenge,
+) {
+  final trusted = challenge.protectionSpace.host == url.host;
+  return ServerTrustAuthResponse(
+    action: trusted
+        ? ServerTrustAuthResponseAction.PROCEED
+        : ServerTrustAuthResponseAction.CANCEL,
+  );
 }
 
 /// App-scoped WebView2 environment, shared by every console surface.
@@ -79,9 +98,17 @@ Future<WebViewEnvironment?> _retrySharedEnvironment() async {
 /// WebView2 surface with a corner reload chip — after the device's idle
 /// sleep a reload is the wake action for the held link.
 class DeviceWebConsole extends StatefulWidget {
-  const DeviceWebConsole({super.key, required this.url});
+  const DeviceWebConsole({
+    super.key,
+    required this.url,
+    this.opener = openDeviceWebPage,
+  });
 
   final Uri url;
+
+  /// Launches the console in the system browser — the way out when the
+  /// embedded surface cannot load. Injectable so tests never shell out.
+  final DeviceWebOpener opener;
 
   @override
   State<DeviceWebConsole> createState() => _DeviceWebConsoleState();
@@ -105,10 +132,14 @@ class _DeviceWebConsoleState extends State<DeviceWebConsole> {
   /// dies with it) and runs a fresh initial request.
   int _attempt = 0;
 
+  /// Only Windows needs the shared WebView2 environment; WKWebView has no
+  /// environment to create, so the macOS surface mounts directly.
+  static final bool _envGated = Platform.isWindows;
+
   @override
   void initState() {
     super.initState();
-    unawaited(_attachEnvironment());
+    if (_envGated) unawaited(_attachEnvironment());
   }
 
   Future<void> _attachEnvironment() async {
@@ -133,15 +164,17 @@ class _DeviceWebConsoleState extends State<DeviceWebConsole> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l = AppLocalizations.of(context)!;
-    if (_sharedEnvironment == null) {
+    if (_envGated && _sharedEnvironment == null) {
       if (_sharedError != null) {
-        // WebView2 runtime missing/broken: the panel's browser button is
-        // the real fallback; this surface just explains and offers a retry.
+        // WebView2 runtime missing/broken: explain, and offer both a retry
+        // and the browser — the embedded surface is not the only way out.
         return _consoleNoticePanel(
           theme,
           text: l.webConsoleEnvFailed,
-          actionLabel: l.webConsoleRetry,
-          onAction: _retryEnvironment,
+          retryLabel: l.webConsoleRetry,
+          onRetry: _retryEnvironment,
+          browserLabel: l.webHoldOpenBrowser,
+          onBrowser: _openInBrowser,
         );
       }
       return const Center(
@@ -153,20 +186,32 @@ class _DeviceWebConsoleState extends State<DeviceWebConsole> {
       );
     }
     if (_loadFailed) {
+      // A failed load must never be a dead end: the LAN console dialog has
+      // no other browser button once the host probe succeeded.
       return _consoleNoticePanel(
         theme,
         text: l.webConsoleLoadFailed,
-        actionLabel: l.webConsoleRetry,
-        onAction: _retryLoad,
+        retryLabel: l.webConsoleRetry,
+        onRetry: _retryLoad,
+        browserLabel: l.webHoldOpenBrowser,
+        onBrowser: _openInBrowser,
       );
     }
     return Stack(
       children: [
         InAppWebView(
           key: ValueKey('${widget.url}#$_attempt'),
-          webViewEnvironment: _sharedEnvironment,
+          webViewEnvironment: _envGated ? _sharedEnvironment : null,
           initialUrlRequest: URLRequest(url: WebUri(widget.url.toString())),
           initialSettings: InAppWebViewSettings(javaScriptEnabled: true),
+          // macOS: device consoles ride self-signed certificates, so the
+          // host of the URL we opened is trusted. Attached only there —
+          // the Windows plugin implements the callback too, and Windows
+          // relies on the environment-level flag instead.
+          onReceivedServerTrustAuthRequest: _envGated
+              ? null
+              : (controller, challenge) =>
+                    serverTrustResponseFor(widget.url, challenge),
           onWebViewCreated: (controller) => _webController = controller,
           onLoadStop: (controller, url) => _loadedOk = true,
           onReceivedError: (controller, request, error) {
@@ -205,14 +250,21 @@ class _DeviceWebConsoleState extends State<DeviceWebConsole> {
     );
   }
 
+  /// Best effort: the browser owns everything after the launch.
+  void _openInBrowser() {
+    unawaited(widget.opener(widget.url));
+  }
+
   /// Shared notice panel for the two console-unavailable causes (WebView2
-  /// environment failure / main document load failure): one line of copy
-  /// plus a single retry action.
+  /// environment failure / main document load failure): one line of copy,
+  /// a retry action, and the browser as the way out.
   Widget _consoleNoticePanel(
     ThemeData theme, {
     required String text,
-    required String actionLabel,
-    required VoidCallback onAction,
+    required String retryLabel,
+    required VoidCallback onRetry,
+    required String browserLabel,
+    required VoidCallback onBrowser,
   }) {
     return Center(
       child: Column(
@@ -227,7 +279,13 @@ class _DeviceWebConsoleState extends State<DeviceWebConsole> {
             ),
           ),
           const SizedBox(height: 8),
-          TextButton(onPressed: onAction, child: Text(actionLabel)),
+          Wrap(
+            alignment: WrapAlignment.center,
+            children: [
+              TextButton(onPressed: onRetry, child: Text(retryLabel)),
+              TextButton(onPressed: onBrowser, child: Text(browserLabel)),
+            ],
+          ),
         ],
       ),
     );
