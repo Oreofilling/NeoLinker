@@ -12,7 +12,7 @@ library;
 /// fit the legacy `<MODEL>_<SUFFIX>` shape (a printer, a demo board) are
 /// noise: the legacy form is only recognized when the model segment
 /// starts with one of these families.
-const List<String> kApModelPrefixes = ['NE101', 'NE301', 'NE503'];
+const List<String> kApModelPrefixes = ['NE101', 'NE301', 'NE503', 'EK410'];
 
 /// Default device softAP address per family (factory config mode). The
 /// CT-Prov HTTP binding is served on the device's own AP-side address,
@@ -22,6 +22,14 @@ const Map<String, String> kApDefaultHostByModel = {
   'NE101': '192.168.1.1',
   'NE301': '192.168.10.10',
   'NE503': '10.0.0.1',
+  'EK410': '192.168.4.1',
+};
+
+/// SoftAP passphrase per family. Families absent from this map run an
+/// open AP (NE101-style); EK410 ships WPA2-PSK with a fixed printed
+/// default (EK410 firmware wifi.c AP_PASS), so it is not a secret.
+const Map<String, String> kApPasswordByModel = {
+  'EK410': '12345678',
 };
 
 /// Resolves the softAP HTTP host for a candidate's model hint (family
@@ -35,6 +43,18 @@ String softapHostForModel(String? modelHint) {
     }
   }
   return kApDefaultHostByModel['NE101']!;
+}
+
+/// Resolves the softAP passphrase for a candidate's model hint (same
+/// family-prefix rule as [softapHostForModel]). Null means the device AP
+/// is open and the joiner must build an open network profile.
+String? softapPasswordForModel(String? modelHint) {
+  if (modelHint != null) {
+    for (final family in kApPasswordByModel.keys) {
+      if (modelHint.startsWith(family)) return kApPasswordByModel[family]!;
+    }
+  }
+  return null;
 }
 
 final RegExp _specSsid = RegExp(r'^CT-AP-([0-9A-F]{6})$');

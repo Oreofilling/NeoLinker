@@ -81,7 +81,10 @@ final class UniversalCtScanner {
       if (advData != null) {
         info = parseAdvertisingData(advData);
         if (info != null) {
-          info = applyScanResponse(info, buildScanResponse(device.name));
+          final merged = applyScanResponse(info, buildScanResponse(device.name));
+          // 注册表滞后（model_code 未注册）时用名字型号段补全展示；
+          // 负载字段仍以 Service Data 为准。
+          info = fillModelFromName(merged, device.name);
         }
       }
     }

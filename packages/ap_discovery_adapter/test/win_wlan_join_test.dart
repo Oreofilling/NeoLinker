@@ -54,6 +54,45 @@ void main() {
     });
   });
 
+  group('wpa2PskNetworkProfileXml', () {
+    test('emits a WPA2-PSK profile carrying the passphrase', () {
+      final xml = wpa2PskNetworkProfileXml('EK410_A1B2C3', '12345678');
+      expect(xml, contains('<name>EK410_A1B2C3</name>'));
+      expect(xml, contains('<authentication>WPA2PSK</authentication>'));
+      expect(xml, contains('<encryption>AES</encryption>'));
+      expect(
+        xml,
+        contains('<keyMaterial>12345678</keyMaterial>'),
+      );
+      expect(xml, contains('<keyType>passPhrase</keyType>'));
+    });
+
+    test('escapes metacharacters in both SSID and passphrase', () {
+      final xml = wpa2PskNetworkProfileXml('A&B', '1<2>&"');
+      expect(xml, contains('<name>A&amp;B</name>'));
+      expect(xml, contains('<keyMaterial>1&lt;2&gt;&amp;&quot;</keyMaterial>'));
+    });
+
+    test('no open-profile artifacts leak into the WPA2 profile', () {
+      final xml = wpa2PskNetworkProfileXml('EK410_A1B2C3', '12345678');
+      expect(xml.contains('<authentication>open'), isFalse);
+    });
+  });
+
+  group('networkProfileXml (dispatcher)', () {
+    test('null password keeps the open profile', () {
+      final xml = networkProfileXml('NE101-P_BBC6DC');
+      expect(xml, contains('<authentication>open</authentication>'));
+      expect(xml.contains('sharedKey'), isFalse);
+    });
+
+    test('a password switches to the WPA2-PSK profile', () {
+      final xml = networkProfileXml('EK410_A1B2C3', password: '12345678');
+      expect(xml, contains('<authentication>WPA2PSK</authentication>'));
+      expect(xml, contains('<keyMaterial>12345678</keyMaterial>'));
+    });
+  });
+
   group('apSsidFromCandidateId', () {
     test('strips the ap: prefix', () {
       expect(apSsidFromCandidateId('ap:NE101-P_BBC6DC'), 'NE101-P_BBC6DC');

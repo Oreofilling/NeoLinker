@@ -33,6 +33,7 @@ NeoLinker 是面向 **CamThink NE 系列低功耗 AI 相机**的 Windows 桌面�
 | NE101 | ✅ | ✅ | — | 主目标机型；BLE 链路已真机端到端验证 |
 | NE301 | 🚧 | ✅ | — | 暂只走 softAP，BLE 计划中；通讯模块配置（Wi-Fi / 蜂窝 / MQTT / webhook） |
 | NE503 | — | — | ✅ | 发现 + 内嵌管理页；最新、真机暴露最少的一路 |
+| EK410 | ✅ | ✅ | — | 墨水屏终端（ESP32-C61，固件 1.3.10+）；softAP 自带 WPA2 密码；尚未与 NeoLinker 真机联调 |
 
 真机测试目前以 NE101 为主；NE301 暂只支持 softAP 配置（BLE 计划中）；
 NE503 支持较新。

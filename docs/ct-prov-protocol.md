@@ -227,7 +227,8 @@ First-generation `model_code` values:
 | `0x00` | undefined, MUST NOT be used on production devices |
 | `0x01` | NE101 |
 | `0x02` | NE301 |
-| `0x03..0xFE` | reserved for future assignment |
+| `0x03` | EK410 |
+| `0x04..0xFE` | reserved for future assignment |
 | `0xFF` | reserved |
 
 The Client MUST NOT hide or reject a device merely because it does not
@@ -949,6 +950,7 @@ operations (§7–§10), error codes (§12), and state machine (§14):
   | NE101 | `192.168.1.1` |
   | NE301 | `192.168.10.10` |
   | NE503 | `10.0.0.1` |
+  | EK410 | `192.168.4.1` |
 
   The Client picks the address by the model prefix of the
   `device_name`/SSID; with no model information (e.g. a `CT-AP-` SSID) it
@@ -967,13 +969,15 @@ operations (§7–§10), error codes (§12), and state machine (§14):
 - Link security is provided by softAP access itself (the current NE101
   softAP is an open network; credentials travel over plaintext HTTP with a
   passive-sniffing exposure equivalent to the Just Works case in the §4.4
-  threat model; a later version may upgrade to WPA2 + HTTPS).
+  threat model; a later version may upgrade to WPA2 + HTTPS). The EK410
+  softAP already ships WPA2-PSK with a fixed printed passphrase.
 - The softAP idle timer counts an HTTP client the same as a CT-Prov BLE
   connection: either one counts as "a user is present" and suppresses the
   no-activity sleep.
 
 The device SSID convention is `CT-AP-<MAC_SUFFIX>`; current NE101 firmware
-retains the legacy SSID `<MODEL>_<MAC_SUFFIX>` (e.g. `NE101-P_BBC6DC`).
+retains the legacy SSID `<MODEL>_<MAC_SUFFIX>` (e.g. `NE101-P_BBC6DC`),
+and EK410 likewise ships the legacy form (`EK410_<MAC_SUFFIX>`).
 Switching to the `CT-AP-` prefix is a product-naming decision; when it
 lands, this section governs and the change ships together.
 

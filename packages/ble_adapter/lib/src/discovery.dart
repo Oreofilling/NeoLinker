@@ -25,7 +25,11 @@ const List<int> kCtProvServiceUuidLe = [
 ];
 
 /// 已知 model_code 到型号名映射（未知型号不拒绝，仅无名）。
-const Map<int, String> kModelCodeNames = {0x01: 'NE101', 0x02: 'NE301'};
+const Map<int, String> kModelCodeNames = {
+  0x01: 'NE101',
+  0x02: 'NE301',
+  0x03: 'EK410',
+};
 
 /// 名称字符集与长度界：A-Z 0-9 -，9 到 17 字节。
 final RegExp _namePattern = RegExp(r'^[A-Z0-9-]{9,17}$');

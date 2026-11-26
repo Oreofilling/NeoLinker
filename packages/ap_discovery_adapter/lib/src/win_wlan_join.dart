@@ -82,18 +82,22 @@ final class ApJoinException implements Exception {
   String toString() => 'ApJoinException($codeName): $message';
 }
 
+String _xmlEscape(String value) {
+  return value
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&apos;');
+}
+
 /// Minimal WLAN_PROFILE XML for an open infrastructure network.
 ///
 /// Only used with the temporary-profile connection mode, so it never lands
 /// in the profile store. SSIDs reaching here matched the device-AP pattern
 /// (ASCII alnum/dash/underscore), but escaping keeps the generator honest.
 String openNetworkProfileXml(String ssid) {
-  final escaped = ssid
-      .replaceAll('&', '&amp;')
-      .replaceAll('<', '&lt;')
-      .replaceAll('>', '&gt;')
-      .replaceAll('"', '&quot;')
-      .replaceAll("'", '&apos;');
+  final escaped = _xmlEscape(ssid);
   return '<?xml version="1.0"?>'
       '<WLANProfile xmlns='
       '"http://www.microsoft.com/networking/WLAN/profile/v1">'
@@ -109,19 +113,55 @@ String openNetworkProfileXml(String ssid) {
       '</WLANProfile>';
 }
 
+/// WLAN_PROFILE XML for a WPA2-PSK infrastructure network (EK410-style
+/// device APs that ship with a fixed passphrase). Same temporary-profile
+/// usage as [openNetworkProfileXml]; the passphrase is a printed device
+/// default, not a user secret.
+String wpa2PskNetworkProfileXml(String ssid, String password) {
+  final escapedSsid = _xmlEscape(ssid);
+  final escapedKey = _xmlEscape(password);
+  return '<?xml version="1.0"?>'
+      '<WLANProfile xmlns='
+      '"http://www.microsoft.com/networking/WLAN/profile/v1">'
+      '<name>$escapedSsid</name>'
+      '<SSIDConfig><SSID><name>$escapedSsid</name></SSID></SSIDConfig>'
+      '<connectionType>ESS</connectionType>'
+      '<connectionMode>manual</connectionMode>'
+      '<MSM><security><authEncryption>'
+      '<authentication>WPA2PSK</authentication>'
+      '<encryption>AES</encryption>'
+      '<useOneX>false</useOneX>'
+      '</authEncryption>'
+      '<sharedKey><keyType>passPhrase</keyType>'
+      '<keyMaterial>$escapedKey</keyMaterial></sharedKey>'
+      '</security></MSM>'
+      '</WLANProfile>';
+}
+
+/// Picks the profile XML for a device AP: WPA2-PSK when a passphrase is
+/// known for the model, open otherwise.
+String networkProfileXml(String ssid, {String? password}) {
+  return password == null
+      ? openNetworkProfileXml(ssid)
+      : wpa2PskNetworkProfileXml(ssid, password);
+}
+
 /// Join surface injected into the app controller (tests fake it).
 abstract class ApJoiner {
   /// Remembers the machine's current Wi-Fi link, or null when there is
   /// nothing joinable (no WLAN interface / radio off / API refused).
   Future<WlanRestorePoint?> capture();
 
-  /// Associates the machine's WLAN with the open device AP and waits until
-  /// the device gateway answers TCP. Throws [ApJoinException] on failure.
+  /// Associates the machine's WLAN with the device AP and waits until the
+  /// device gateway answers TCP. [password] selects a WPA2-PSK profile
+  /// when the model's AP ships one (null = open AP). Throws
+  /// [ApJoinException] on failure.
   Future<void> join(
     String ssid, {
     Duration? timeout,
     String gatewayHost,
     int gatewayPort,
+    String? password,
     void Function(String step)? onStep,
   });
 
@@ -175,6 +215,7 @@ final class WinWlanJoiner implements ApJoiner {
     Duration? timeout,
     String gatewayHost = '192.168.1.1',
     int gatewayPort = 80,
+    String? password,
     void Function(String step)? onStep,
   }) async {
     if (!Platform.isWindows) {
@@ -185,7 +226,7 @@ final class WinWlanJoiner implements ApJoiner {
 
     await _withFirstInterface<void>(_kAnyState, (handle, guid) async {
       onStep?.call('requesting wlan connect');
-      final xml = openNetworkProfileXml(ssid).toNativeUtf16();
+      final xml = networkProfileXml(ssid, password: password).toNativeUtf16();
       final params = calloc<WlanConnectionParameters>();
       try {
         params.ref
