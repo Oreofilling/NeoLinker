@@ -274,6 +274,50 @@ void main() {
     });
   });
 
+  group('macWlanAdapterState', () {
+    test('maps the CoreWLAN power state', () async {
+      final on = await macWlanAdapterState(runner: _router({
+        'adapterState': (_) => {'present': true, 'powerOn': true},
+      }));
+      expect(on, (present: true, powerOn: true));
+
+      final off = await macWlanAdapterState(runner: _router({
+        'adapterState': (_) => {'present': true, 'powerOn': false},
+      }));
+      expect(off, (present: true, powerOn: false));
+
+      final absent = await macWlanAdapterState(runner: _router({
+        'adapterState': (_) => {'present': false, 'powerOn': false},
+      }));
+      expect(absent, (present: false, powerOn: false));
+    });
+
+    test('quiet null on a channel failure or a malformed answer', () async {
+      Future<Object?> failing(
+          String method, Map<Object?, Object?>? args) async {
+        throw PlatformException(code: 'no_interface');
+      }
+      expect(await macWlanAdapterState(runner: failing), isNull);
+
+      // A test host has no native runner registered for the channel.
+      Future<Object?> missing(
+          String method, Map<Object?, Object?>? args) async {
+        throw MissingPluginException();
+      }
+      expect(await macWlanAdapterState(runner: missing), isNull);
+
+      for (final answer in [null, 'odd', {'present': 'yes'}, {'present': true}]) {
+        expect(
+          await macWlanAdapterState(runner: _router({
+            'adapterState': (_) => answer,
+          })),
+          isNull,
+          reason: '$answer',
+        );
+      }
+    });
+  });
+
   group('assembly defaults', () {
     // The suite runs on Windows/Linux/macOS CI hosts alike: the factories
     // must follow the host (engaged on macOS; null keeps the Windows

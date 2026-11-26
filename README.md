@@ -59,6 +59,27 @@ Requirements: Windows 10/11 x64, the WebView2 Evergreen runtime (preinstalled
 on Windows 11 and most updated Windows 10), and a Bluetooth adapter for the
 BLE channel.
 
+## macOS (experimental)
+
+The macOS target passes CI (analyze, tests and a release build on a macOS
+runner) and shares the Windows feature set: BLE / softAP / LAN discovery,
+provisioning, receipts, the self-check's Wi-Fi state, the embedded device
+console and live camera QR scanning. It has **not** been run on hardware.
+Every macOS-specific path is compile-validated only, so treat it as
+experimental until the checks below pass on a real Mac:
+
+- The embedded console loading the softAP page over plain http, and the
+  NE503 console over its self-signed certificate.
+- `mobile_scanner` camera selection and detection rate.
+- How device web pages handle focus under WKWebView.
+
+To get a build, run the CI workflow manually with the build option
+enabled and download the `neolinker-macos-arm64` artifact. It is unsigned:
+right-click the app and choose Open.
+
+If the embedded console cannot load, its failure panel can open the page
+in the system browser. If the camera cannot open, image upload still works.
+
 ## Build from source
 
 Prerequisites:

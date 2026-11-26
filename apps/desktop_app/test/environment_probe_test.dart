@@ -184,5 +184,57 @@ void main() {
         'adapter_probe_failed',
       );
     });
+
+    test('unparseable adapter JSON degrades to adapter_probe_failed',
+        () async {
+      final probe = DesktopEnvironmentProbe(
+        probeBle: () async => const CtEnvironmentReport(
+          readiness: CtBleReadiness.ready,
+          detail: 'radio on',
+        ),
+        enumerateAdapters: () async => 'not json',
+        nicEnumerator: nicList,
+      );
+
+      final report = await probe.probe();
+
+      expect(
+        report.channel(DiscoveryChannel.accessPoint)?.reason,
+        'adapter_probe_failed',
+      );
+    });
+  });
+
+  // macOS leg of the adapter enumeration: CoreWLAN reports one WLAN
+  // interface's power state instead of a Get-NetAdapter table, so it is
+  // mapped onto the adapter list apChannelReadiness already understands.
+  group('apAdaptersFromMacState', () {
+    test('unknown state stays null (probe failed)', () {
+      expect(apAdaptersFromMacState(null), isNull);
+    });
+
+    test('no WLAN interface is an empty list (no_wlan_adapter)', () {
+      final adapters =
+          apAdaptersFromMacState((present: false, powerOn: false));
+      expect(adapters, isEmpty);
+      expect(apChannelReadiness(adapters).reason, 'no_wlan_adapter');
+    });
+
+    test('powered off maps to a disabled adapter (wlan_disabled)', () {
+      final readiness = apChannelReadiness(
+        apAdaptersFromMacState((present: true, powerOn: false)),
+      );
+      expect(readiness.capability, ChannelCapability.limited);
+      expect(readiness.reason, kWlanDisabledReason);
+    });
+
+    test('powered on maps to an enabled adapter (ready)', () {
+      final adapters =
+          apAdaptersFromMacState((present: true, powerOn: true))!;
+      expect(adapters.single.mediaType, kWlanMediaType);
+      final readiness = apChannelReadiness(adapters);
+      expect(readiness.capability, ChannelCapability.available);
+      expect(readiness.reason, 'ready');
+    });
   });
 }

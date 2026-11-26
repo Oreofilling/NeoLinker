@@ -4,15 +4,18 @@
 library;
 
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neolinker_ui/neolinker_ui.dart';
 
 import 'package:desktop_app/l10n/app_localizations.dart';
+import 'package:desktop_app/provisioning/device_qr_uri.dart';
 import 'package:desktop_app/provisioning/provisioning_controller.dart';
 import 'package:desktop_app/shell/pages/qr_guide_page.dart';
 import 'package:desktop_app/shell/widgets/qr_camera_scanner.dart';
+import 'package:desktop_app/shell/widgets/qr_live_scanner.dart';
 
 import 'provisioning_fakes.dart';
 
@@ -77,6 +80,7 @@ Future<void> _pumpGuide(
   QrFrameSource? source,
   QrImageDecoder? decoder,
   QrImagePicker? picker,
+  QrRawScannerBuilder? rawScannerBuilder,
 }) async {
   tester.platformDispatcher.localesTestValue = const [Locale('zh')];
   await tester.pumpWidget(
@@ -92,6 +96,7 @@ Future<void> _pumpGuide(
           qrFrameSource: source,
           qrDecoder: decoder,
           qrImagePicker: picker,
+          qrRawScannerBuilder: rawScannerBuilder,
         ),
       ),
     ),
@@ -248,6 +253,101 @@ void main() {
     expect(controller.qrFocusSuffix, isNull);
     expect(find.text('拍照识别'), findsOneWidget);
 
+    controller.dispose();
+  });
+
+  // macOS leg: QrLiveScanner keeps the stills loop's contract (fire once
+  // on a device code, ignore everything else) but takes its raw text from
+  // an injected builder, so these run on every host without a camera.
+  group('QrLiveScanner', () {
+    late void Function(String) emit;
+
+    Future<void> pumpLive(
+      WidgetTester tester,
+      List<DeviceQrUri> decoded,
+    ) => tester.pumpWidget(
+          MaterialApp(
+            locale: const Locale('zh'),
+            theme: nlTheme(Brightness.light),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: Scaffold(
+              body: Center(
+                // The guide page hosts the card in a narrower column; give
+                // it a similar box so the 4:3 preview leaves room below.
+                child: SizedBox(
+                  width: 320,
+                  child: QrLiveScanner(
+                    onDecoded: decoded.add,
+                    rawScannerBuilder: (context, onRaw) {
+                      emit = onRaw;
+                      return const SizedBox.expand();
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+
+    testWidgets('a device code fires onDecoded exactly once', (tester) async {
+      final decoded = <DeviceQrUri>[];
+      await pumpLive(tester, decoded);
+
+      emit(_kValidUri);
+      await tester.pump();
+      expect(decoded.single.macSuffix, 'A1B2C3');
+
+      // Later detections are ignored: the parent has already advanced.
+      emit(_kValidUri);
+      await tester.pump();
+      expect(decoded, hasLength(1));
+    });
+
+    testWidgets('foreign text keeps scanning until a device code arrives', (
+      tester,
+    ) async {
+      final decoded = <DeviceQrUri>[];
+      await pumpLive(tester, decoded);
+
+      emit('https://example.com/pay/123');
+      emit('');
+      await tester.pump();
+      expect(decoded, isEmpty);
+
+      emit(_kValidUri);
+      await tester.pump();
+      expect(decoded, hasLength(1));
+    });
+  });
+
+  testWidgets('guide page mounts the live scanner on macOS', (tester) async {
+    // Only macOS picks the live leg. Elsewhere the page keeps the stills
+    // scanner, whose default source needs a real camera — out of unit scope.
+    if (!Platform.isMacOS) return;
+    final source = FakeSource();
+    final controller = _wiredController(source);
+    addTearDown(source.close);
+
+    await _pumpGuide(
+      tester,
+      controller,
+      rawScannerBuilder: (context, emit) => TextButton(
+        onPressed: () => emit(_kValidUri),
+        child: const Text('live'),
+      ),
+    );
+    await _settle(tester); // self-check passes, scanning starts
+
+    // Step 1 mounts the live scanner (not the stills one).
+    await tester.tap(find.text('下一步'));
+    await _settle(tester);
+    expect(find.text('live'), findsOneWidget);
+
+    // Its raw text flows into the same decode handler as the stills loop.
+    await tester.tap(find.text('live'));
+    await _settle(tester);
+    expect(controller.qrFocusSuffix, 'A1B2C3');
     controller.dispose();
   });
 }

@@ -35,6 +35,9 @@ class AppDelegate: FlutterAppDelegate {
 /// - `join` {ssid, password?} -> Bool — CoreWLAN associate when the SSID
 ///   is scannable, else `networksetup -setairportnetwork`.
 /// - `disconnect` -> Bool.
+/// - `adapterState` -> {present: Bool, powerOn: Bool} — whether a WLAN
+///   interface exists and whether its radio is on. Reads no SSIDs, so it
+///   needs no Location Services (the self-check calls it on every probe).
 ///
 /// CoreWLAN calls and the networksetup subprocess are slow (seconds), so
 /// everything runs off the main thread; results hop back to main.
@@ -75,6 +78,16 @@ enum MacWlanChannel {
         DispatchQueue.global(qos: .userInitiated).async {
           let ok = (try? client.interface()?.disassociate()) != nil
           DispatchQueue.main.async { result(ok) }
+        }
+      case "adapterState":
+        // Power state only: `client.interface()` and `powerOn()` read no
+        // SSID, so unlike `scan` this never triggers a location prompt.
+        DispatchQueue.global(qos: .userInitiated).async {
+          let iface = client.interface()
+          let present = iface != nil
+          let powerOn = iface?.powerOn() ?? false
+          let state: [String: Any] = ["present": present, "powerOn": powerOn]
+          DispatchQueue.main.async { result(state) }
         }
       default:
         result(FlutterMethodNotImplemented)

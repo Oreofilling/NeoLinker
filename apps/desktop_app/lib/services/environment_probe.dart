@@ -2,10 +2,11 @@
 /// （AP 通道）+ IPv4 网卡枚举（CT-Disc 通道），汇总为
 /// [EnvironmentCheckReport]。
 ///
-/// 网卡枚举用 PowerShell Get-NetAdapter（对象输出，随系统语言无关；
-/// netsh 文本输出会随 locale 变化，不采用）；CT-Disc 腿走 dart:io 的
-/// 网卡枚举（跨平台、无需 PowerShell）。探测失败按该通道
-/// unavailable 处理并携带原因，不阻塞其余通道。
+/// 网卡枚举在 Windows 上用 PowerShell Get-NetAdapter（对象输出，随系统
+/// 语言无关；netsh 文本输出会随 locale 变化，不采用），在 macOS 上读
+/// CoreWLAN 的无线网卡电源状态；CT-Disc 腿走 dart:io 的网卡枚举
+/// （跨平台、无需 PowerShell）。探测失败按该通道 unavailable 处理并
+/// 携带原因，不阻塞其余通道。
 library;
 
 import 'dart:convert';
@@ -13,6 +14,8 @@ import 'dart:io';
 
 import 'package:ble_universal/ble_universal.dart';
 import 'package:ct_disc_adapter/ct_disc_adapter.dart';
+
+import 'mac_wlan.dart';
 
 /// 无线网卡在 Get-NetAdapter 里的 PhysicalMediaType 取值。
 const String kWlanMediaType = 'Native 802.11';
@@ -100,6 +103,22 @@ ChannelReadiness apChannelReadiness(List<NetAdapterInfo>? adapters) {
   );
 }
 
+/// CoreWLAN 网卡状态 → [apChannelReadiness] 认的网卡列表：无无线网卡为
+/// 空列表；电源关闭为一块 Disabled 的无线网卡（判为受限，扫描页随之
+/// 提供"打开 Wi-Fi 设置"）；电源开启为就绪。状态未知（通道不可用）
+/// 保持 null，结论是探测失败而不是猜测。
+List<NetAdapterInfo>? apAdaptersFromMacState(MacWlanAdapterState? state) {
+  if (state == null) return null;
+  if (!state.present) return const [];
+  return [
+    NetAdapterInfo(
+      name: 'Wi-Fi',
+      status: state.powerOn ? 'Up' : 'Disabled',
+      mediaType: kWlanMediaType,
+    ),
+  ];
+}
+
 /// CT-Disc 通道结论（M5：从预留常量升级为真实网卡枚举）：有物理网卡
 /// 即可用（加入组播监听）；只有 VPN/虚拟网卡为受限（NIC 选择器可显式
 /// 勾选）；枚举失败或无任何 IPv4 端点为不可用。
@@ -143,11 +162,15 @@ class DesktopEnvironmentProbe {
     Future<List<NicEndpoint>> Function({bool includeVirtual})? nicEnumerator,
     this.legTimeout = const Duration(seconds: 10),
   }) : _probeBle = probeBle ?? UniversalCtEnvironment.probe,
-       _enumerateAdapters = enumerateAdapters ?? _queryAdaptersViaPowerShell,
+       // 注入的 enumerateAdapters 保留 JSON 字符串契约（测试夹具沿用），
+       // 包装成网卡列表；默认来源按宿主分派。
+       _enumerateAdapters = enumerateAdapters == null
+           ? _adaptersForHost
+           : _adaptersFromJson(enumerateAdapters),
        _nicEnumerator = nicEnumerator ?? enumerateNicEndpoints;
 
   final Future<CtEnvironmentReport> Function() _probeBle;
-  final Future<String?> Function() _enumerateAdapters;
+  final Future<List<NetAdapterInfo>?> Function() _enumerateAdapters;
   final Future<List<NicEndpoint>> Function({bool includeVirtual})
   _nicEnumerator;
 
@@ -167,14 +190,12 @@ class DesktopEnvironmentProbe {
       _guardedNics().timeout(legTimeout, onTimeout: () => null),
     ]);
     final bleReport = results[0] as CtEnvironmentReport;
-    final adapterJson = results[1] as String?;
+    final adapters = results[1] as List<NetAdapterInfo>?;
     final nics = results[2] as List<NicEndpoint>?;
     return EnvironmentCheckReport(
       channels: [
         bleChannelReadiness(bleReport),
-        apChannelReadiness(
-          adapterJson == null ? null : parseNetAdapters(adapterJson),
-        ),
+        apChannelReadiness(adapters),
         ctDiscChannelReadiness(nics),
       ],
     );
@@ -196,7 +217,7 @@ class DesktopEnvironmentProbe {
     }
   }
 
-  Future<String?> _guardedAdapters() async {
+  Future<List<NetAdapterInfo>?> _guardedAdapters() async {
     try {
       return await _enumerateAdapters();
     } catch (_) {
@@ -212,8 +233,31 @@ class DesktopEnvironmentProbe {
     }
   }
 
+  /// 把注入的 JSON 字符串枚举器包装成网卡列表来源（测试夹具的契约
+  /// 保持不变）。块体闭包不能写在构造初始化列表里，所以经由本方法返回。
+  static Future<List<NetAdapterInfo>?> Function() _adaptersFromJson(
+    Future<String?> Function() enumerateAdapters,
+  ) {
+    return () async {
+      final jsonText = await enumerateAdapters();
+      return jsonText == null ? null : parseNetAdapters(jsonText);
+    };
+  }
+
+  /// 默认网卡来源，按宿主分派：Windows 走 PowerShell，macOS 读 CoreWLAN
+  /// 电源状态，其余宿主不提供网卡信息（结论降级为探测失败）。
+  static Future<List<NetAdapterInfo>?> _adaptersForHost() async {
+    if (Platform.isWindows) {
+      final jsonText = await _queryAdaptersViaPowerShell();
+      return jsonText == null ? null : parseNetAdapters(jsonText);
+    }
+    if (Platform.isMacOS) {
+      return apAdaptersFromMacState(await macWlanAdapterState());
+    }
+    return null;
+  }
+
   static Future<String?> _queryAdaptersViaPowerShell() async {
-    if (!Platform.isWindows) return null;
     final result = await Process.run('powershell', [
       '-NoProfile',
       '-Command',

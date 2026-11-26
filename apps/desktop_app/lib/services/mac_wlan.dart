@@ -11,6 +11,9 @@
 /// - `join` {ssid, password?} -> bool (CoreWLAN associate, falling back to
 ///   `networksetup -setairportNetwork`)
 /// - `disconnect` -> bool
+/// - `adapterState` -> {present: bool, powerOn: bool} — whether a WLAN
+///   interface exists and whether its radio is on. Needs no Location
+///   Services, so the self-check can read it without a prompt.
 ///
 /// The channel runner is constructor-injectable so tests drive the whole
 /// surface with a plain closure — the workspace never mocks binary
@@ -21,7 +24,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:ap_discovery_adapter/ap_discovery_adapter.dart';
-import 'package:flutter/services.dart' show MethodChannel, PlatformException;
+import 'package:flutter/services.dart'
+    show MethodChannel, MissingPluginException, PlatformException;
 
 const MethodChannel _kMacWlanChannel = MethodChannel('neolinker/mac_wlan');
 
@@ -85,6 +89,34 @@ Future<List<WlanNetwork>?> macWlanScanOnce({MacWlanRunner? runner}) async {
         profileName: '',
       ),
   ];
+}
+
+/// Wi-Fi adapter state as CoreWLAN sees it: `present` says whether a WLAN
+/// interface exists at all, `powerOn` whether its radio is on (meaningful
+/// only when present).
+typedef MacWlanAdapterState = ({bool present, bool powerOn});
+
+/// Reads the Wi-Fi adapter state over the channel (`adapterState`). Null
+/// when the native side is unavailable or the answer is malformed — the
+/// self-check then reports the AP channel as probe-failed instead of
+/// guessing. Unlike [macWlanScanOnce] this needs no Location Services.
+Future<MacWlanAdapterState?> macWlanAdapterState({
+  MacWlanRunner? runner,
+}) async {
+  final call = runner ?? _defaultRunner;
+  final Object? raw;
+  try {
+    raw = await call('adapterState', null);
+  } on PlatformException {
+    return null;
+  } on MissingPluginException {
+    return null;
+  }
+  if (raw is! Map) return null;
+  final present = raw['present'];
+  final powerOn = raw['powerOn'];
+  if (present is! bool || powerOn is! bool) return null;
+  return (present: present, powerOn: powerOn);
 }
 
 /// CoreWLAN reports RSSI in dBm; [WlanNetwork] carries the Windows 0-100
