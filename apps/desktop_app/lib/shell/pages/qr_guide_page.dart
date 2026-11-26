@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:discovery_domain/discovery_domain.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import '../../l10n/app_localizations.dart';
 import '../../provisioning/device_qr_uri.dart';
 import '../../provisioning/provisioning_controller.dart';
 import '../widgets/qr_camera_scanner.dart';
+import '../widgets/qr_live_scanner.dart';
 
 /// QR add-device guide (v6): a UI-only three-step walk — wake the device,
 /// read its ID from the QR code, then connect to the located row. Step 2
@@ -25,6 +27,7 @@ class QrGuidePage extends StatefulWidget {
     this.qrFrameSource,
     this.qrDecoder,
     this.qrImagePicker,
+    this.qrRawScannerBuilder,
   });
 
   final ProvisioningController controller;
@@ -37,6 +40,10 @@ class QrGuidePage extends StatefulWidget {
 
   /// Test injection for the upload mode's file picker.
   final QrImagePicker? qrImagePicker;
+
+  /// Test injection for the macOS live scanner's raw-text source; null
+  /// uses mobile_scanner.
+  final QrRawScannerBuilder? qrRawScannerBuilder;
 
   @override
   State<QrGuidePage> createState() => _QrGuidePageState();
@@ -191,11 +198,19 @@ class _QrGuidePageState extends State<QrGuidePage> {
                   _modeToggle(l),
                   const SizedBox(height: 12),
                   if (_mode == _QrInputMode.camera)
-                    QrCameraScanner(
-                      frameSource: widget.qrFrameSource,
-                      decoder: widget.qrDecoder,
-                      onDecoded: _onQrDecoded,
-                    )
+                    // macOS has no `camera` implementation, so it gets the
+                    // live scanner; an injected frame source (tests) keeps
+                    // the stills loop on every host.
+                    Platform.isMacOS && widget.qrFrameSource == null
+                        ? QrLiveScanner(
+                            onDecoded: _onQrDecoded,
+                            rawScannerBuilder: widget.qrRawScannerBuilder,
+                          )
+                        : QrCameraScanner(
+                            frameSource: widget.qrFrameSource,
+                            decoder: widget.qrDecoder,
+                            onDecoded: _onQrDecoded,
+                          )
                   else
                     _uploadCard(c, l),
                   const SizedBox(height: 16),
