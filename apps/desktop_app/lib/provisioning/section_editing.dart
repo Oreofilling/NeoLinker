@@ -49,8 +49,14 @@ Object? fieldValue(ConfigSection section, String field) {
       };
     case CommSection(:final type):
       return field == 'type' ? type.wireName : null;
-    case EthernetSection():
-      return null;
+    case EthernetSection(:final ipMode, :final ip, :final gateway, :final netmask):
+      return switch (field) {
+        'ip_mode' => ipMode,
+        'ip' => ip,
+        'gateway' => gateway,
+        'netmask' => netmask,
+        _ => null,
+      };
     case MqttSection(
         :final enable,
         :final host,
@@ -119,8 +125,14 @@ ConfigSection applyFieldValue(ConfigSection section, String field, Object? value
         return CommSection(type: value);
       }
       return section;
-    case EthernetSection():
-      return section;
+    case EthernetSection(:final ipMode, :final ip, :final gateway, :final netmask):
+      return switch (field) {
+        'ip_mode' => EthernetSection(ipMode: value as String, ip: ip, gateway: gateway, netmask: netmask),
+        'ip' => EthernetSection(ipMode: ipMode, ip: value as String?, gateway: gateway, netmask: netmask),
+        'gateway' => EthernetSection(ipMode: ipMode, ip: ip, gateway: value as String?, netmask: netmask),
+        'netmask' => EthernetSection(ipMode: ipMode, ip: ip, gateway: gateway, netmask: value as String?),
+        _ => section,
+      };
     case MqttSection(:final enable, :final host, :final port, :final clientId, :final username, :final password, :final tls, :final topic, :final qos):
       return switch (field) {
         'enable' => MqttSection(enable: value as bool, host: host, port: port, clientId: clientId, username: username, password: password, tls: tls, topic: topic, qos: qos),

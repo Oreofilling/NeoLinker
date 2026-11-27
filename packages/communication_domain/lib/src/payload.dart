@@ -48,9 +48,17 @@ Map<String, Object?> buildSectionPayload(
           'password': password,
         if (_present(country, declaredFields, 'country')) 'country': country,
       };
-    // 无可写字段：空节对象表示「确认使用 DHCP/插线即用」。
-    case EthernetSection():
-      return {};
+    // ip_mode is sent whenever the device declares it; the addresses only
+    // travel with ip_mode=static.
+    case EthernetSection(:final ipMode, :final ip, :final gateway, :final netmask):
+      return {
+        if (declaredFields.contains('ip_mode')) 'ip_mode': ipMode,
+        if (ipMode == 'static') ...{
+          if (declaredFields.contains('ip') && (ip?.isNotEmpty ?? false)) 'ip': ip,
+          if (declaredFields.contains('gateway') && (gateway?.isNotEmpty ?? false)) 'gateway': gateway,
+          if (declaredFields.contains('netmask') && (netmask?.isNotEmpty ?? false)) 'netmask': netmask,
+        },
+      };
     case CommSection(:final type):
       return {
         if (declaredFields.contains('type')) 'type': type.wireName,

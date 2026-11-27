@@ -64,6 +64,10 @@ extension NavL10n on AppLocalizations {
         'url' => formFieldUrl,
         'secret' => formFieldSecret,
         'header' => formFieldHeader,
+        'ip_mode' => formFieldIpMode,
+        'ip' => formFieldIp,
+        'gateway' => formFieldGateway,
+        'netmask' => formFieldNetmask,
         _ => field,
       };
 
