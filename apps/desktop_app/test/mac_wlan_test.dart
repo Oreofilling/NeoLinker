@@ -49,14 +49,54 @@ void main() {
       expect(networks.every((n) => n.profileName.isEmpty), isTrue);
     });
 
-    test('quiet pass (null) on no interface or location denial', () async {
-      for (final code in ['no_interface', 'location_denied']) {
+    test('quiet pass (null) on no interface or a closed location gate',
+        () async {
+      for (final code in [
+        'no_interface',
+        'location_denied',
+        'location_pending',
+      ]) {
         Future<Object?> runner(String method, Map<Object?, Object?>? args) async {
           throw PlatformException(code: code);
         }
         expect(await macWlanScanOnce(runner: runner), isNull,
             reason: code);
       }
+    });
+
+    test('each pass reports its blocker to the gate, clearing on success',
+        () async {
+      final gate = MacApScanGate();
+      var scans = 0;
+      final runner = _router({'scan': (_) {
+        scans++;
+        // First poll: the location prompt is still unanswered.
+        if (scans == 1) throw PlatformException(code: 'location_pending');
+        return [
+          {'ssid': 'NE101_2001CA', 'rssi': -60},
+        ];
+      }});
+
+      expect(await macWlanScanOnce(runner: runner, gate: gate), isNull);
+      expect(gate.blocker, MacApScanBlocker.locationPending);
+
+      final networks = await macWlanScanOnce(runner: runner, gate: gate);
+      expect(networks!.single.ssid, 'NE101_2001CA');
+      expect(gate.blocker, isNull);
+    });
+
+    test('an unexpected channel error rethrows and leaves the gate alone',
+        () async {
+      final gate = MacApScanGate()..record(MacApScanBlocker.locationDenied);
+      Future<Object?> boom(String method, Map<Object?, Object?>? args) async {
+        throw PlatformException(code: 'scan_failed');
+      }
+
+      await expectLater(
+        macWlanScanOnce(runner: boom, gate: gate),
+        throwsA(isA<PlatformException>()),
+      );
+      expect(gate.blocker, MacApScanBlocker.locationDenied);
     });
 
     test('quiet pass on a null scan result', () async {
@@ -363,14 +403,86 @@ void main() {
     });
   });
 
+  group('macWlanLocationStatus', () {
+    test('maps the native status strings', () async {
+      const cases = {
+        'authorized': MacLocationStatus.authorized,
+        'denied': MacLocationStatus.denied,
+        'pending': MacLocationStatus.pending,
+        'notRequested': MacLocationStatus.notRequested,
+      };
+      for (final MapEntry(:key, :value) in cases.entries) {
+        final status = await macWlanLocationStatus(
+          runner: _router({'locationStatus': (_) => key}),
+        );
+        expect(status, value, reason: key);
+      }
+    });
+
+    test('quiet null on channel failure, missing plugin, or odd answer',
+        () async {
+      Future<Object?> failing(
+          String method, Map<Object?, Object?>? args) async {
+        throw PlatformException(code: 'boom');
+      }
+
+      expect(await macWlanLocationStatus(runner: failing), isNull);
+
+      Future<Object?> missing(
+          String method, Map<Object?, Object?>? args) async {
+        throw MissingPluginException();
+      }
+
+      expect(await macWlanLocationStatus(runner: missing), isNull);
+
+      for (final answer in [null, 'odd', 42]) {
+        final status = await macWlanLocationStatus(
+          runner: _router({'locationStatus': (_) => answer}),
+        );
+        expect(status, isNull, reason: '$answer');
+      }
+    });
+  });
+
+  group('MacApScanGate', () {
+    test('holds the blocker of the latest quiet pass', () {
+      final gate = MacApScanGate();
+      expect(gate.blocker, isNull);
+
+      gate.record(MacApScanBlocker.locationDenied);
+      expect(gate.blocker, MacApScanBlocker.locationDenied);
+
+      // A pass that got through clears it.
+      gate.record(null);
+      expect(gate.blocker, isNull);
+    });
+  });
+
   group('assembly defaults', () {
     // The suite runs on Windows/Linux/macOS CI hosts alike: the factories
     // must follow the host (engaged on macOS; null keeps the Windows
     // wlanapi default everywhere else).
-    test('defaultMacApJoiner and scanner follow the host platform', () {
+    test('default macOS AP wiring follows the host platform', () {
       expect(defaultMacApJoiner(),
           Platform.isMacOS ? isA<MacWlanJoiner>() : isNull);
       expect(defaultMacApScanner(), Platform.isMacOS ? isNotNull : isNull);
+    });
+
+    test('defaultMacApBlocker reads the shared gate on macOS hosts',
+        () async {
+      addTearDown(() => sharedMacApScanGate.record(null));
+      expect(defaultMacApBlocker()(), isNull);
+
+      Future<Object?> denied(
+          String method, Map<Object?, Object?>? args) async {
+        throw PlatformException(code: 'location_denied');
+      }
+
+      await macWlanScanOnce(runner: denied, gate: sharedMacApScanGate);
+      expect(
+        defaultMacApBlocker()(),
+        Platform.isMacOS ? MacApScanBlocker.locationDenied : isNull,
+      );
     });
   });
 }

@@ -34,6 +34,10 @@
 	<string>NeoLinker uses the camera to scan the QR code printed on the device.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>NeoLinker talks to NE-series cameras on the local network to read and change their configuration.</string>
+	<!-- macOS exposes Wi-Fi SSIDs only to apps authorized for Location
+	     Services; the app lists device hotspots and never reads position. -->
+	<key>NSLocationUsageDescription</key>
+	<string>NeoLinker uses Location Services to see nearby Wi-Fi networks and find NE-series cameras in setup mode. Your position is never read.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<!-- The embedded device console (WKWebView) loads the softAP gateway

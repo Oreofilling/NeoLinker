@@ -6,14 +6,17 @@
 ///
 /// Channel contract (see macos/Runner/AppDelegate.swift):
 /// - `currentSsid` -> String? (null when not associated)
-/// - `scan` -> List<{ssid: String, rssi: int (dBm)}> or
-///   PlatformException `no_interface` / `location_denied`
+/// - `scan` -> List<{ssid: String, rssi: int (dBm)}> holding every network
+///   that exposes an SSID, or PlatformException `no_interface` /
+///   `location_denied` / `location_pending` / `scan_failed`
 /// - `join` {ssid, password?} -> bool (CoreWLAN associate, falling back to
-///   `networksetup -setairportNetwork`)
+///   `networksetup -setairportnetwork`)
 /// - `disconnect` -> bool
 /// - `adapterState` -> {present: bool, powerOn: bool} — whether a WLAN
 ///   interface exists and whether its radio is on. Needs no Location
 ///   Services, so the self-check can read it without a prompt.
+/// - `locationStatus` -> [MacLocationStatus] name — the Location Services
+///   verdict CoreWLAN gates SSIDs behind; reads it, never prompts.
 ///
 /// The channel runner is constructor-injectable so tests drive the whole
 /// surface with a plain closure — the workspace never mocks binary
@@ -24,6 +27,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:ap_discovery_adapter/ap_discovery_adapter.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/services.dart'
     show MethodChannel, MissingPluginException, PlatformException;
 
@@ -60,27 +64,44 @@ ApJoiner? defaultMacApJoiner() =>
 /// Production AP scanner for the macOS assembly; null on other platforms
 /// (the source then falls back to the Windows default, which reports
 /// nothing). macOS 10.15+ gates SSID scans behind Location Services — the
-/// Swift side requests authorization, and a denial surfaces here as a
-/// null pass (the AP channel reports nothing this cycle, QR/manual entry
-/// still work).
+/// Swift side requests authorization on the first pass, and a closed gate
+/// surfaces here as a null pass recorded on [sharedMacApScanGate] (the AP
+/// channel reports nothing this cycle, QR/manual entry still work).
 Future<List<WlanNetwork>?> Function()? defaultMacApScanner() =>
-    Platform.isMacOS ? () => macWlanScanOnce() : null;
+    Platform.isMacOS
+        ? () => macWlanScanOnce(gate: sharedMacApScanGate)
+        : null;
 
 /// One scan pass over CoreWLAN. Null when the radio/interface is missing
-/// or the user denied location access — either way this poll cycle has no
-/// AP channel verdict.
-Future<List<WlanNetwork>?> macWlanScanOnce({MacWlanRunner? runner}) async {
+/// or the location gate is closed — either way this poll cycle has no AP
+/// channel verdict. A [gate] receives what blocked the pass (null once a
+/// pass gets through) so the environment report can follow the gate.
+Future<List<WlanNetwork>?> macWlanScanOnce({
+  MacWlanRunner? runner,
+  MacApScanGate? gate,
+}) async {
   final call = runner ?? _defaultRunner;
   final Object? rows;
   try {
     rows = await call('scan', null);
   } on PlatformException catch (e) {
-    if (e.code == 'no_interface' || e.code == 'location_denied') {
-      return null;
+    final blocker = switch (e.code) {
+      'no_interface' => MacApScanBlocker.noInterface,
+      'location_denied' => MacApScanBlocker.locationDenied,
+      'location_pending' => MacApScanBlocker.locationPending,
+      // Not a capability verdict: leave a trace for debug runs and let the
+      // poll loop swallow it like any other failed pass.
+      _ => null,
+    };
+    if (blocker == null) {
+      debugPrint('mac AP scan failed: ${e.code} ${e.message ?? ''}');
+      rethrow;
     }
-    rethrow;
+    gate?.record(blocker);
+    return null;
   }
   if (rows == null) return null;
+  gate?.record(null);
   return [
     for (final row in (rows as List<Object?>).cast<Map<Object?, Object?>>())
       WlanNetwork(
@@ -118,6 +139,73 @@ Future<MacWlanAdapterState?> macWlanAdapterState({
   if (present is! bool || powerOn is! bool) return null;
   return (present: present, powerOn: powerOn);
 }
+
+/// Location Services verdict for the macOS AP channel. CoreWLAN exposes
+/// SSIDs only to authorized apps, so the verdict is part of the channel's
+/// readiness (names travel over the channel as-is).
+enum MacLocationStatus {
+  authorized,
+
+  /// Refused, restricted, or Location Services switched off system-wide.
+  denied,
+
+  /// Not decided yet; the prompt was already requested this launch.
+  pending,
+
+  /// Not decided yet; the first scan pass requests it.
+  notRequested,
+}
+
+/// Reads the Location Services verdict (`locationStatus`). Null when the
+/// native side is unavailable or the answer is unknown — the self-check
+/// then keeps the adapter-only AP verdict instead of guessing. Unlike
+/// [macWlanScanOnce] this never prompts.
+Future<MacLocationStatus?> macWlanLocationStatus({
+  MacWlanRunner? runner,
+}) async {
+  final call = runner ?? _defaultRunner;
+  final Object? raw;
+  try {
+    raw = await call('locationStatus', null);
+  } on PlatformException {
+    return null;
+  } on MissingPluginException {
+    return null;
+  }
+  for (final status in MacLocationStatus.values) {
+    if (status.name == raw) return status;
+  }
+  return null;
+}
+
+/// What kept the latest macOS AP scan pass from seeing any network.
+enum MacApScanBlocker { noInterface, locationDenied, locationPending }
+
+/// Latest AP scan blocker, as reported by the production scanner. The
+/// controller's sweep tick reads [blocker] and refreshes the environment
+/// report when it changes — level-triggered, so a change landing while a
+/// refresh is in flight is still picked up by the next tick.
+final class MacApScanGate {
+  MacApScanBlocker? _blocker;
+
+  /// The blocker of the latest quiet pass; null once a pass got through.
+  MacApScanBlocker? get blocker => _blocker;
+
+  /// Records the outcome of a scan pass.
+  void record(MacApScanBlocker? blocker) {
+    if (blocker == _blocker) return;
+    debugPrint('mac AP scan blocker: ${blocker?.name ?? 'none'}');
+    _blocker = blocker;
+  }
+}
+
+/// The gate behind [defaultMacApScanner].
+final MacApScanGate sharedMacApScanGate = MacApScanGate();
+
+/// Production blocker read for the controller's sweep tick: the shared
+/// gate on macOS, a constant "nothing blocked" everywhere else.
+MacApScanBlocker? Function() defaultMacApBlocker() =>
+    Platform.isMacOS ? () => sharedMacApScanGate.blocker : () => null;
 
 /// CoreWLAN reports RSSI in dBm; [WlanNetwork] carries the Windows 0-100
 /// quality scale (`rssiEstimate` inverts this on the way out).
