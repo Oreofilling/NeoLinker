@@ -17,15 +17,116 @@ import 'security_write_retry.dart';
 /// requestMtu 返回实际生效值。
 const int kCtProvTargetMtu = 247;
 
+/// Both spellings of a 128-bit CT-Prov UUID as seen from universal_ble.
+///
+/// Windows hands out GATT UUIDs as the GUID it reads off the wire: it lays a
+/// GUID over the 16 wire bytes, so the first three fields come out as
+/// little-endian numbers while the last 8 bytes stay in wire order. A server
+/// that sends the UUID in the Bluetooth SIG byte order (NE301 does; its
+/// Service Data was checked byte by byte) therefore shows up as a different
+/// string than the canonical text the protocol uses, and a plain string
+/// comparison reports the service as missing. Matching accepts either
+/// spelling; later operations reuse the string from the discovery table,
+/// which is what universal_ble expects.
+Set<String> _uuidSpellings(String canonical) {
+  final lower = canonical.toLowerCase();
+  final hex = lower.replaceAll('-', '');
+  if (hex.length != 32) {
+    return {lower};
+  }
+  // Wire bytes are the canonical (big-endian) byte sequence reversed.
+  // Windows then reads a GUID over them: the first 4, 2 and 2 wire bytes as
+  // little-endian integers (so each of those runs comes out reversed), the
+  // remaining 8 bytes verbatim.
+  final canonicalBytes = [
+    for (var i = 0; i < 16; i++)
+      int.parse(hex.substring(i * 2, i * 2 + 2), radix: 16),
+  ];
+  final wire = canonicalBytes.reversed.toList();
+  final windowsBytes = [
+    ...wire.sublist(0, 4).reversed,
+    ...wire.sublist(4, 6).reversed,
+    ...wire.sublist(6, 8).reversed,
+    ...wire.sublist(8, 16),
+  ];
+  final windowsHex = windowsBytes
+      .map((v) => v.toRadixString(16).padLeft(2, '0'))
+      .join();
+  final windows = [
+    windowsHex.substring(0, 8),
+    windowsHex.substring(8, 12),
+    windowsHex.substring(12, 16),
+    windowsHex.substring(16, 20),
+    windowsHex.substring(20, 32),
+  ].join('-');
+  return {lower, windows};
+}
+
+/// The CT-Prov service and its three characteristics as spelled by the
+/// platform that produced the discovery table.
+final class ResolvedCtUuids {
+  const ResolvedCtUuids({
+    required this.service,
+    required this.c2d,
+    required this.d2c,
+    required this.meta,
+  });
+
+  final String service;
+  final String c2d;
+  final String d2c;
+  final String meta;
+}
+
+/// Locates the CT-Prov service and its three characteristics in a discovery
+/// table under either UUID spelling. Returns null when the service is
+/// absent; a present service with missing characteristics throws.
+ResolvedCtUuids? resolveCtProvUuids(List<BleService> services) {
+  final serviceSpellings = _uuidSpellings(kCtProvServiceUuid);
+  final expected = <String, Set<String>>{
+    'c2d': _uuidSpellings(kC2dCharacteristicUuid),
+    'd2c': _uuidSpellings(kD2cCharacteristicUuid),
+    'meta': _uuidSpellings(kMetaCharacteristicUuid),
+  };
+  for (final service in services) {
+    if (!serviceSpellings.contains(service.uuid.toLowerCase())) continue;
+    final resolved = <String, String>{};
+    for (final characteristic in service.characteristics) {
+      final uuid = characteristic.uuid.toLowerCase();
+      for (final entry in expected.entries) {
+        if (entry.value.contains(uuid)) {
+          resolved[entry.key] = characteristic.uuid;
+        }
+      }
+    }
+    if (resolved.length < expected.length) {
+      final missing = [
+        for (final key in expected.keys)
+          if (!resolved.containsKey(key)) key,
+      ];
+      throw StateError('CT-Prov characteristics missing: $missing');
+    }
+    return ResolvedCtUuids(
+      service: service.uuid,
+      c2d: resolved['c2d']!,
+      d2c: resolved['d2c']!,
+      meta: resolved['meta']!,
+    );
+  }
+  return null;
+}
+
 final class UniversalCtGattChannel implements CtGattChannel {
   UniversalCtGattChannel._(
     this._deviceId,
+    this._uuids,
     this._mtu,
     this.meta,
     this._onStep,
   );
 
   final String _deviceId;
+  final ResolvedCtUuids _uuids;
   final int _mtu;
   final void Function(String step)? _onStep;
   final StreamController<int> _mtuChanges = StreamController<int>.broadcast();
@@ -80,7 +181,10 @@ final class UniversalCtGattChannel implements CtGattChannel {
           )
           .join(' ');
       onStep?.call('open: gatt ${gattDump.isEmpty ? '(empty)' : gattDump}');
-      _validateCharacteristics(services);
+      final uuids = resolveCtProvUuids(services);
+      if (uuids == null) {
+        throw StateError('CT-Prov service not found after discovery');
+      }
       onStep?.call('open: gatt ok (${services.length} services)');
 
       // §4.3：META 明文可读；读不到只降级（meta=null），不阻断连接。
@@ -88,8 +192,8 @@ final class UniversalCtGattChannel implements CtGattChannel {
       try {
         final raw = await UniversalBle.read(
           deviceId,
-          kCtProvServiceUuid,
-          kMetaCharacteristicUuid,
+          uuids.service,
+          uuids.meta,
           timeout: timeout,
         );
         meta = parseMeta(raw.toList());
@@ -102,8 +206,8 @@ final class UniversalCtGattChannel implements CtGattChannel {
 
       await UniversalBle.subscribeIndications(
         deviceId,
-        kCtProvServiceUuid,
-        kD2cCharacteristicUuid,
+        uuids.service,
+        uuids.d2c,
         timeout: timeout,
       );
       onStep?.call('open: D2C subscribed');
@@ -125,7 +229,13 @@ final class UniversalCtGattChannel implements CtGattChannel {
       // 系统 bonding；设备端 SMP Security Request 是其他客户端的兜底。
       onStep?.call('open: security uses pre-established system bond');
 
-      final channel = UniversalCtGattChannel._(deviceId, mtu, meta, onStep);
+      final channel = UniversalCtGattChannel._(
+        deviceId,
+        uuids,
+        mtu,
+        meta,
+        onStep,
+      );
       // 协商结果立刻播报，让传输层按新 MTU 重建重组器。
       channel._mtuChanges.add(mtu);
       return channel;
@@ -137,28 +247,6 @@ final class UniversalCtGattChannel implements CtGattChannel {
       }
       rethrow;
     }
-  }
-
-  /// 校验 CT-Prov 服务与三个特征齐全（UUID 大小写按平台归一后比较）。
-  static void _validateCharacteristics(List<BleService> services) {
-    final serviceLower = kCtProvServiceUuid.toLowerCase();
-    final expected = <String>{
-      kC2dCharacteristicUuid.toLowerCase(),
-      kD2cCharacteristicUuid.toLowerCase(),
-      kMetaCharacteristicUuid.toLowerCase(),
-    };
-    for (final service in services) {
-      if (service.uuid.toLowerCase() != serviceLower) continue;
-      final found = service.characteristics
-          .map((characteristic) => characteristic.uuid.toLowerCase())
-          .toSet();
-      final missing = expected.difference(found);
-      if (missing.isNotEmpty) {
-        throw StateError('CT-Prov characteristics missing: $missing');
-      }
-      return;
-    }
-    throw StateError('CT-Prov service not found after discovery');
   }
 
   @override
@@ -178,8 +266,8 @@ final class UniversalCtGattChannel implements CtGattChannel {
         _ensureOpen();
         await UniversalBle.write(
           _deviceId,
-          kCtProvServiceUuid,
-          kC2dCharacteristicUuid,
+          _uuids.service,
+          _uuids.c2d,
           value,
         );
       },
@@ -206,7 +294,7 @@ final class UniversalCtGattChannel implements CtGattChannel {
   @override
   Stream<List<int>> get d2cFrames => UniversalBle.characteristicValueStream(
         _deviceId,
-        kD2cCharacteristicUuid,
+        _uuids.d2c,
       ).map((bytes) => bytes.toList());
 
   /// 再次读取 META（一般用 open 阶段的 [meta] 即可）。
@@ -214,8 +302,8 @@ final class UniversalCtGattChannel implements CtGattChannel {
     _ensureOpen();
     final raw = await UniversalBle.read(
       _deviceId,
-      kCtProvServiceUuid,
-      kMetaCharacteristicUuid,
+      _uuids.service,
+      _uuids.meta,
     );
     return parseMeta(raw.toList());
   }
@@ -227,8 +315,8 @@ final class UniversalCtGattChannel implements CtGattChannel {
     try {
       await UniversalBle.unsubscribe(
         _deviceId,
-        kCtProvServiceUuid,
-        kD2cCharacteristicUuid,
+        _uuids.service,
+        _uuids.d2c,
       );
     } catch (_) {
       // 外设可能已经主动断链；清理保持幂等。

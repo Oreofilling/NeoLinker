@@ -149,6 +149,9 @@ class SectionFormCard extends StatelessWidget {
       // Monospace identifier-ish fields.
       case 'bssid':
       case 'country':
+      case 'ip':
+      case 'gateway':
+      case 'netmask':
         return _textField(context, field, mono: true);
       // Secret fields with masking toggle.
       case 'password':
@@ -170,6 +173,13 @@ class SectionFormCard extends StatelessWidget {
           field,
           kAuthOptions,
           fieldValue(section, field) as String?,
+        );
+      case 'ip_mode':
+        return _dropdown<String>(
+          context,
+          field,
+          const ['dhcp', 'static'],
+          fieldValue(section, field) as String? ?? 'dhcp',
         );
       case 'qos':
         return _dropdown<int>(context, field, const [

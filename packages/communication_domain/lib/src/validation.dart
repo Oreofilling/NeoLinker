@@ -116,7 +116,9 @@ List<FieldProblem> _required(
 const _bssidPattern = r'^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$';
 const _countryPattern = r'^[A-Z]{2}$';
 const _pinPattern = r'^\d{4,8}$';
+const _ipv4Pattern = r'^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$';
 const _authValues = {'none', 'pap', 'chap', 'pap_or_chap'};
+const _ipModeValues = {'dhcp', 'static'};
 
 /// 校验一个配置节。[declaredFields] 是能力声明的该节 fields；
 /// [declaredNetworks] 仅 comm 节需要（type 的合法取值集合）。
@@ -174,9 +176,27 @@ List<FieldProblem> validateSection(
             const FieldProblem('country', FieldProblemCode.invalidFormat),
         ],
       ];
-    case EthernetSection():
-      // 无可写字段：载荷恒为空对象。
-      return const [];
+    case EthernetSection(:final ipMode, :final ip, :final gateway, :final netmask):
+      return [
+        if (declaredFields.contains('ip_mode') && !_ipModeValues.contains(ipMode))
+          const FieldProblem('ip_mode', FieldProblemCode.invalidValue),
+        if (ipMode == 'static') ...[
+          // static needs all three addresses, each a valid dotted quad.
+          ..._required('ip', ip ?? '', 15, declaredFields),
+          ..._required('gateway', gateway ?? '', 15, declaredFields),
+          ..._required('netmask', netmask ?? '', 15, declaredFields),
+          for (final (field, value) in [
+            ('ip', ip),
+            ('gateway', gateway),
+            ('netmask', netmask),
+          ])
+            if (value != null && value.isNotEmpty) ...[
+              ..._gate(field, value, declaredFields),
+              if (declaredFields.contains(field) && !RegExp(_ipv4Pattern).hasMatch(value))
+                FieldProblem(field, FieldProblemCode.invalidFormat),
+            ],
+        ],
+      ];
     case CommSection(:final type):
       final wire = type.wireName;
       return [

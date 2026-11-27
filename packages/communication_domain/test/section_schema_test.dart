@@ -248,6 +248,71 @@ void main() {
         {},
       );
     });
+
+    test('ethernet: dhcp sends no addresses; static needs three valid ones',
+        () {
+      const fields = ['ip_mode', 'ip', 'gateway', 'netmask'];
+
+      // dhcp: an address that happens to be set is neither sent nor a problem.
+      expect(
+        buildSectionPayload(
+          const EthernetSection(ip: '192.168.1.5'),
+          declaredFields: fields,
+        ),
+        {'ip_mode': 'dhcp'},
+      );
+      expect(
+        validateSection(
+          const EthernetSection(ip: '192.168.1.5'),
+          declaredFields: fields,
+        ),
+        isEmpty,
+      );
+
+      // static: with all three addresses it validates and travels in full.
+      const staticSection = EthernetSection(
+        ipMode: 'static',
+        ip: '192.168.1.100',
+        gateway: '192.168.1.1',
+        netmask: '255.255.255.0',
+      );
+      expect(
+        buildSectionPayload(staticSection, declaredFields: fields),
+        {
+          'ip_mode': 'static',
+          'ip': '192.168.1.100',
+          'gateway': '192.168.1.1',
+          'netmask': '255.255.255.0',
+        },
+      );
+      expect(validateSection(staticSection, declaredFields: fields), isEmpty);
+
+      // static with a missing address is a required problem.
+      expect(
+        validateSection(
+          const EthernetSection(ipMode: 'static', ip: '192.168.1.100'),
+          declaredFields: fields,
+        ),
+        isNotEmpty,
+      );
+      // An invalid IPv4 is a format problem.
+      expect(
+        validateSection(
+          const EthernetSection(
+            ipMode: 'static',
+            ip: '999.1.1.1',
+            gateway: '192.168.1.1',
+            netmask: '255.255.255.0',
+          ),
+          declaredFields: fields,
+        ),
+        contains(
+          predicate<FieldProblem>(
+            (p) => p.field == 'ip' && p.code == FieldProblemCode.invalidFormat,
+          ),
+        ),
+      );
+    });
   });
 
   group('comm 节', () {

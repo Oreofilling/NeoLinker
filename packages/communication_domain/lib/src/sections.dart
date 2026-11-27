@@ -80,9 +80,22 @@ final class HalowSection extends ConfigSection {
   final String? country;
 }
 
-/// Ethernet/PoE 插线即用（DHCP），无可写字段。
+/// Ethernet/PoE IP mode: [ipMode] is 'dhcp' (plug and play) or 'static'
+/// (which needs ip/gateway/netmask). A device that declares no fields gets
+/// an empty section, i.e. DHCP.
 final class EthernetSection extends ConfigSection {
-  const EthernetSection() : super('ethernet');
+  const EthernetSection({
+    this.ipMode = 'dhcp',
+    this.ip,
+    this.gateway,
+    this.netmask,
+  }) : super('ethernet');
+
+  /// 'dhcp' | 'static'.
+  final String ipMode;
+  final String? ip;
+  final String? gateway;
+  final String? netmask;
 }
 
 /// 活动网络选择器：写入即切换；type 必须是能力中声明的网络节。

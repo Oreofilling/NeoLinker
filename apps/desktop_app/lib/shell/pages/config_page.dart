@@ -26,7 +26,7 @@ const _textFieldsBySection = <String, List<String>>{
   'cellular': ['apn', 'username', 'password', 'pin'],
   'halow': ['ssid', 'password', 'country'],
   'comm': <String>[],
-  'ethernet': <String>[],
+  'ethernet': ['ip', 'gateway', 'netmask'],
   'mqtt': ['host', 'port', 'client_id', 'username', 'password', 'topic'],
   'webhook': ['url', 'secret', 'header'],
 };
