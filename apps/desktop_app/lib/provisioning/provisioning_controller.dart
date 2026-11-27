@@ -1265,6 +1265,23 @@ class ProvisioningController extends ChangeNotifier {
     });
   }
 
+  /// Channels that are missing from the scan running right now because
+  /// their source refused to start (a Bluetooth radio that is off or
+  /// missing, for one). The other channels keep scanning, and every later
+  /// start retries these, so rescanning once the radio is back picks the
+  /// channel up again. Empty while no scan runs or with a plain source.
+  List<DiscoveryChannel> get failedScanChannels => switch (_machine.phase) {
+    SessionPhase.scanning || SessionPhase.resultsAvailable =>
+      _startErrors.keys.toList(growable: false),
+    _ => const <DiscoveryChannel>[],
+  };
+
+  /// Raw start failures of the wired composite's children, by channel.
+  Map<DiscoveryChannel, Object> get _startErrors => switch (_source) {
+    CompositeDiscoverySource(:final startErrors) => startErrors,
+    _ => const <DiscoveryChannel, Object>{},
+  };
+
   /// 进入扫描相位：新任务用新注册表；连续扫描——出候选不停源，射频
   /// 持续静默监听，设备上线/下线直接反映在列表里（停源只发生在选定
   /// 候选、超时进入空态或会话清理时）。
@@ -1296,10 +1313,25 @@ class ProvisioningController extends ChangeNotifier {
   }
 
   /// 源启动失败（权限/射频在开扫瞬间变化）不外抛：立即按空结果收敛
-  /// 并记录问题，不让界面悬在扫描态干等超时。
+  /// 并记录问题，不让界面悬在扫描态干等超时。Only reached when no
+  /// source could start: while healthy channels remain, the composite
+  /// keeps the scan running and the gap is reported through
+  /// [failedScanChannels] instead.
   Future<void> _startSourceGuarded() async {
     try {
       await _source.start();
+      // A source that refused to start while its siblings run (radio
+      // off, adapter missing) only degrades the scan: the healthy
+      // channels keep feeding the registry and the page names the
+      // channel that is missing. The composite retries it at every
+      // start.
+      final startErrors = _startErrors;
+      for (final MapEntry(:key, :value) in startErrors.entries) {
+        debugPrint('scan source ${key.name} failed to start: $value');
+      }
+      if (startErrors.isNotEmpty && !_disposed) {
+        notifyListeners();
+      }
       // Each scan window re-solicits probe-capable channels: CT-Disc
       // devices answer ct-probe with an immediate announce (v1.2.0 §3.3)
       // instead of waiting out their 5 s beacon. The very first scan

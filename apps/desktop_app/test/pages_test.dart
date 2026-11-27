@@ -28,7 +28,7 @@ import 'package:desktop_app/shell/widgets/scan_radar.dart';
 import 'provisioning_fakes.dart';
 
 ProvisioningController wiredController(
-  FakeSource source,
+  DiscoverySource source,
   FakeCtDevice device, {
   Duration scanTimeout = const Duration(seconds: 20),
   Duration selfCheckHold = Duration.zero,
@@ -714,6 +714,80 @@ void main() {
     expect(controller.phase, SessionPhase.scanning);
 
     // 无候选则二次超时仍收敛回空态（也保证测试收尾无挂起定时器）。
+    await tester.pump(const Duration(seconds: 21));
+    expect(controller.phase, SessionPhase.scanEmpty);
+  });
+
+  testWidgets(
+    'a channel that fails to start is named while the others scan',
+    (tester) async {
+      final ble = FakeSource(channel: DiscoveryChannel.ble)
+        ..startError = StateError('Bluetooth is not available');
+      final ap = FakeSource(channel: DiscoveryChannel.accessPoint);
+      final device = FakeCtDevice();
+      final controller = wiredController(
+        CompositeDiscoverySource([ble, ap]),
+        device,
+      );
+      addTearDown(ble.close);
+      addTearDown(ap.close);
+      addTearDown(device.close);
+
+      await pumpApp(tester, controller);
+      await settle(tester); // Self-check passed -> scanning page.
+
+      // The notice names the failed channel by its full label, and only
+      // that channel.
+      expect(controller.phase, SessionPhase.scanning);
+      final notice = find.textContaining('扫描未能启动');
+      expect(notice, findsOneWidget);
+      final text = tester.widget<Text>(notice).data!;
+      expect(text, contains('蓝牙 BLE'));
+      expect(text, isNot(contains('无线网卡')));
+
+      // Window burns out -> nothing scans -> the notice goes with it.
+      await tester.pump(const Duration(seconds: 21));
+      expect(controller.phase, SessionPhase.scanEmpty);
+      expect(notice, findsNothing);
+
+      // Rescan attempts the channel again and carries on with the others.
+      await tester.tap(find.text('重新扫描'));
+      await settle(tester);
+      expect(controller.phase, SessionPhase.scanning);
+      expect(ble.startCount, 2);
+      expect(notice, findsOneWidget);
+
+      // A device on the healthy channel shows up; the results phase keeps
+      // scanning, so the notice stays.
+      ap.emit(apCandidate());
+      await settle(tester);
+      expect(controller.phase, SessionPhase.resultsAvailable);
+      expect(controller.candidates, hasLength(1));
+      expect(notice, findsOneWidget);
+
+      // Ends in the results phase with timers armed: dispose in the body.
+      controller.dispose();
+    },
+  );
+
+  testWidgets('no channel notice while every source starts', (tester) async {
+    final ble = FakeSource(channel: DiscoveryChannel.ble);
+    final ap = FakeSource(channel: DiscoveryChannel.accessPoint);
+    final device = FakeCtDevice();
+    final controller = wiredController(
+      CompositeDiscoverySource([ble, ap]),
+      device,
+    );
+    addTearDown(ble.close);
+    addTearDown(ap.close);
+    addTearDown(device.close);
+    addTearDown(controller.dispose);
+
+    await pumpApp(tester, controller);
+    await settle(tester); // Self-check passed -> scanning page.
+
+    expect(find.textContaining('扫描未能启动'), findsNothing);
+
     await tester.pump(const Duration(seconds: 21));
     expect(controller.phase, SessionPhase.scanEmpty);
   });

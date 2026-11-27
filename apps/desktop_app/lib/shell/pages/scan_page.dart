@@ -358,6 +358,13 @@ class _ScanPageState extends State<ScanPage> {
                       ),
                       const SizedBox(height: 14),
                       _channelSection(c, l, candidates),
+                      // A channel whose source did not start (no Bluetooth
+                      // radio, for one) is named here while the others
+                      // keep scanning.
+                      if (controller.failedScanChannels.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        _failedChannelsNotice(c, l),
+                      ],
                       const SizedBox(height: 14),
                       // M5: the QR doorway is no longer a pinned boxed
                       // strip (it competed with the rows); it lives inside
@@ -505,6 +512,31 @@ class _ScanPageState extends State<ScanPage> {
           _channelCards(c, l, candidates),
         ],
       ],
+    );
+  }
+
+  /// Names the channels that are missing from the scan running now
+  /// ([ProvisioningController.failedScanChannels]). The rest keep
+  /// scanning, so this is a warning beside the channel strip — not an
+  /// error state — and it points at the header's rescan button, which
+  /// retries the channel.
+  Widget _failedChannelsNotice(NLColors c, AppLocalizations l) {
+    final channels = [
+      for (final channel in controller.failedScanChannels)
+        l.channelLabel(channel),
+    ].join(' · ');
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: c.warningBg,
+        borderRadius: BorderRadius.circular(NLRadii.radiusLg),
+        border: Border(left: BorderSide(color: c.warning, width: 3)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Text(
+        l.scanChannelStartFailed(channels),
+        style: NLType.body.copyWith(color: c.foreground),
+      ),
     );
   }
 

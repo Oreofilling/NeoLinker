@@ -16,7 +16,18 @@ import 'package:desktop_app/services/environment_probe.dart';
 
 /// 可手动喂候选的假发现源，记录启停次数（广播流：重扫会再次订阅，
 /// 且无监听者时 close 也能完成，与真实源行为一致）。
-final class FakeSource implements DiscoverySource {
+final class FakeSource implements ChannelDiscoverySource {
+  FakeSource({this.channel = DiscoveryChannel.ble});
+
+  /// The channel this fake serves. Declared the way the real adapters do,
+  /// so a start failure surfaces under that channel.
+  @override
+  final DiscoveryChannel channel;
+
+  /// When set, start() records the attempt and throws this error (a radio
+  /// that is off or missing); clear it to let the channel come up.
+  Object? startError;
+
   final StreamController<DiscoveryCandidate> _controller =
       StreamController<DiscoveryCandidate>.broadcast();
 
@@ -29,6 +40,8 @@ final class FakeSource implements DiscoverySource {
   @override
   Future<void> start() async {
     startCount++;
+    final error = startError;
+    if (error != null) throw error;
   }
 
   @override
