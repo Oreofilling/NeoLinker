@@ -94,8 +94,6 @@
   "scanApDialogOpenWeb": "Open web console",
   "scanApDialogCancel": "Cancel",
   "scanRescan": "Rescan",
-  "scanChannelStartFailed": "{channels} could not start scanning; the other channels keep scanning. Once it is working again, click Rescan to retry.",
-  "@scanChannelStartFailed": { "placeholders": { "channels": { "type": "String" } } },
   "scanMacSuffix": "ID {suffix}",
   "@scanMacSuffix": { "placeholders": { "suffix": { "type": "String" } } },
   "emptyHint": "No provisionable device nearby. Make sure the device is in config mode (within 60s of power-on).",
