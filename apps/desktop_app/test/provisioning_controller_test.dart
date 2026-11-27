@@ -1572,6 +1572,61 @@ void main() {
       expect(source.startCount, 1);
     });
 
+    test('a change landing during a refresh is read by a follow-up one',
+        () async {
+      // Arrange: a refresh whose BLE leg waits on `hold`.
+      final source = FakeSource();
+      var probes = 0;
+      MacApScanBlocker? blocker;
+      var location = MacLocationStatus.notRequested;
+      var hold = Completer<void>()..complete();
+      final controller = buildWithBlocker(
+        source,
+        macApBlocker: () => blocker,
+        location: () => location,
+        probeBle: () async {
+          probes++;
+          await hold.future;
+          return const CtEnvironmentReport(
+            readiness: CtBleReadiness.ready,
+            detail: 'fake ready',
+          );
+        },
+      );
+      addTearDown(controller.dispose);
+      addTearDown(source.close);
+      await controller.runSelfCheck();
+      await until(
+        () => controller.phase == SessionPhase.scanning,
+        'selfcheck did not enter scanning',
+      );
+      expect(probes, 1);
+
+      // Act: a refresh starts and hangs after reading the pending state…
+      hold = Completer<void>();
+      blocker = MacApScanBlocker.locationPending;
+      location = MacLocationStatus.pending;
+      await until(() => probes == 2, 'refresh did not start');
+
+      // …and the blocker changes again while that refresh is in flight.
+      blocker = null;
+      location = MacLocationStatus.authorized;
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+      expect(probes, 2);
+
+      // Assert: once the hung refresh settles, a follow-up one reads the
+      // new state instead of leaving the report on the stale verdict.
+      hold.complete();
+      await until(() => probes == 3, 'no follow-up refresh');
+      await until(
+        () => controller.environmentReport
+            ?.channel(DiscoveryChannel.accessPoint)
+            ?.reason ==
+        'ready',
+        'report stayed on the stale verdict',
+      );
+    });
+
     test('an unchanged blocker does not re-run the probe', () async {
       // Arrange
       final source = FakeSource();

@@ -119,6 +119,10 @@ class ProvisioningController extends ChangeNotifier {
   // MacApScanGate); the sweep tick reads it.
   final MacApScanBlocker? Function() _macApBlocker;
   MacApScanBlocker? _lastApBlocker;
+
+  /// A blocker change seen while a gate refresh was still running: that
+  /// refresh may have read the previous state, so one more follows it.
+  bool _apBlockerStale = false;
   final ApJoiner _apJoiner;
   final ProvTransport Function(Uri endpoint)? _apTransportFactory;
   final DeviceWebOpener _webOpener;
@@ -1276,13 +1280,35 @@ class ProvisioningController extends ChangeNotifier {
   /// location prompt, a denial). A change re-reads the environment: the
   /// location gate is part of the AP channel's readiness, and outside the
   /// self-check phase the re-check only refreshes the report. Level-
-  /// triggered on purpose — a change landing while a refresh is in flight
-  /// is still picked up by the next tick.
+  /// triggered on purpose: a change that lands while a refresh is in
+  /// flight is read by a follow-up refresh.
   void _syncApBlocker() {
     final blocker = _macApBlocker();
     if (blocker == _lastApBlocker) return;
     _lastApBlocker = blocker;
-    unawaited(runSelfCheck());
+    if (_selfChecking) {
+      _apBlockerStale = true;
+      return;
+    }
+    unawaited(_refreshAfterApBlocker());
+  }
+
+  /// One report refresh, followed by another when the blocker changed
+  /// while this one was running.
+  Future<void> _refreshAfterApBlocker() async {
+    try {
+      await runSelfCheck();
+    } finally {
+      _continueApBlockerRefresh();
+    }
+  }
+
+  /// Schedules the follow-up refresh when the blocker changed while the
+  /// previous one was running.
+  void _continueApBlockerRefresh() {
+    if (_disposed || !_apBlockerStale) return;
+    _apBlockerStale = false;
+    unawaited(_refreshAfterApBlocker());
   }
 
   /// 进入扫描相位：新任务用新注册表；连续扫描——出候选不停源，射频
