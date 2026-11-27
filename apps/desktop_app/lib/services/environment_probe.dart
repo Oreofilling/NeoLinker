@@ -128,6 +128,11 @@ List<NetAdapterInfo>? apAdaptersFromMacState(MacWlanAdapterState? state) {
   ];
 }
 
+/// Location verdict reader for the production assembly: macOS reads the
+/// CoreLocation gate through the mac_wlan channel, other hosts have none.
+Future<MacLocationStatus?> locationStatusForHost() async =>
+    Platform.isMacOS ? macWlanLocationStatus() : null;
+
 /// Applies the macOS location gate to an adapter-only AP verdict
 /// ([apChannelReadiness]). An adapter problem outranks the gate: nothing
 /// is gained by blaming location while the radio is missing or off. A
@@ -206,7 +211,11 @@ class DesktopEnvironmentProbe {
        _enumerateAdapters = enumerateAdapters == null
            ? _adaptersForHost
            : _adaptersFromJson(enumerateAdapters),
-       _locationStatus = locationStatus ?? _locationStatusForHost,
+       // No host default for the location leg: widget tests inject the
+       // other legs, and on a macOS host a real channel call never settles
+       // in their fake clock. The production assembly passes
+       // [locationStatusForHost].
+       _locationStatus = locationStatus ?? _noLocationStatus,
        _nicEnumerator = nicEnumerator ?? enumerateNicEndpoints;
 
   final Future<CtEnvironmentReport> Function() _probeBle;
@@ -287,8 +296,8 @@ class DesktopEnvironmentProbe {
     };
   }
 
-  /// Bare catch on purpose: on a macOS test host without a plugin binding
-  /// the channel throws something other than a PlatformException.
+  /// Bare catch on purpose: a macOS test host may throw something that is
+  /// neither a PlatformException nor a MissingPluginException.
   Future<MacLocationStatus?> _guardedLocation() async {
     try {
       return await _locationStatus();
@@ -297,10 +306,7 @@ class DesktopEnvironmentProbe {
     }
   }
 
-  /// 默认定位结论来源，按宿主分派：macOS 读 CoreLocation 闸门，其余宿主
-  /// 没有定位闸门。先判平台，只有 macOS 会碰通道。
-  static Future<MacLocationStatus?> _locationStatusForHost() async =>
-      Platform.isMacOS ? macWlanLocationStatus() : null;
+  static Future<MacLocationStatus?> _noLocationStatus() async => null;
 
   /// 默认网卡来源，按宿主分派：Windows 走 PowerShell，macOS 读 CoreWLAN
   /// 电源状态，其余宿主不提供网卡信息（结论降级为探测失败）。

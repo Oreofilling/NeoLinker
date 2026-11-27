@@ -48,7 +48,8 @@ class ProvisioningController extends ChangeNotifier {
     this.ttl = const Duration(seconds: 12),
     this.selfCheckHold = const Duration(seconds: 5),
     this.sweepInterval = const Duration(seconds: 3),
-  }) : _probe = environmentProbe ?? DesktopEnvironmentProbe(),
+  }) : _probe = environmentProbe ??
+             DesktopEnvironmentProbe(locationStatus: locationStatusForHost),
        // M5 default: the production app scans all three channels at once
        // (BLE first — the fast path users watch); tests inject their own
        // source and never touch this wiring.
