@@ -271,7 +271,6 @@ void main() {
       await until(() => ap.startCount == 1, 'healthy channel did not start');
 
       expect(controller.phase, SessionPhase.scanning);
-      expect(controller.failedScanChannels, [DiscoveryChannel.ble]);
 
       ap.emit(apCandidate());
       await until(
@@ -305,7 +304,6 @@ void main() {
       'rescan did not restart the sources',
     );
     expect(controller.phase, SessionPhase.scanning);
-    expect(controller.failedScanChannels, [DiscoveryChannel.ble]);
 
     // Radio back on: the next rescan picks the channel up.
     ble.startError = null;
@@ -314,7 +312,6 @@ void main() {
       () => ble.startCount == 3,
       'rescan did not retry the failed channel',
     );
-    expect(controller.failedScanChannels, isEmpty);
 
     ble.emit(sampleCandidate());
     await until(
@@ -343,22 +340,8 @@ void main() {
       );
 
       expect(controller.lastProblem!.reason, 'source_start_failed');
-      // Nothing scans any more, so no channel counts as missing.
-      expect(controller.failedScanChannels, isEmpty);
     },
   );
-
-  test('a plain source reports no failed channel', () async {
-    final source = FakeSource();
-    final controller = makeController(source);
-    addTearDown(controller.dispose);
-    addTearDown(source.close);
-
-    await controller.runSelfCheck();
-    await until(() => source.startCount == 1, 'selfcheck did not start scan');
-
-    expect(controller.failedScanChannels, isEmpty);
-  });
 
   // v6 连续扫描：候选 TTL 过期扫空后自动重开扫描窗口。
   test('swept-empty results auto-restart the scan window (v6)', () async {

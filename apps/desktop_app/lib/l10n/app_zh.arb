@@ -94,8 +94,6 @@
   "scanApDialogOpenWeb": "打开网页配置",
   "scanApDialogCancel": "取消",
   "scanRescan": "重新扫描",
-  "scanChannelStartFailed": "「{channels}」扫描未能启动，其余通道继续扫描。恢复后点「重新扫描」重试。",
-  "@scanChannelStartFailed": { "placeholders": { "channels": { "type": "String" } } },
   "scanMacSuffix": "标识 {suffix}",
   "@scanMacSuffix": { "placeholders": { "suffix": { "type": "String" } } },
   "emptyHint": "附近没有发现可配置设备。请确认设备已进入配置模式（上电后 60 秒内）。",
