@@ -181,10 +181,16 @@ final class CtSessionClient {
 
   /// 扫描网络（§9）：仅能力 scannable=true 的节；[cursor] 取上一页
   /// 返回值继续翻页。
+  ///
+  /// The first page defaults to a 30 s timeout. The device sweeps the
+  /// Wi-Fi channels synchronously (pausing AP and STA, restoring them once
+  /// the results are in; 12-18 s measured, plus the multi-frame indication
+  /// transfer), while later pages are served from the snapshot at once. The
+  /// 10 s request default would turn the first page into a false timeout.
   Future<ScanNetworksResult> scanNetworks({
     required String section,
     String? cursor,
-    Duration timeout = kDefaultRequestTimeout,
+    Duration timeout = const Duration(seconds: 30),
   }) async {
     final response = await _requireTransport().sendRequest(
       ProvRequest(
