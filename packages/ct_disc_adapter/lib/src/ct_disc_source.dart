@@ -133,7 +133,7 @@ DiscoveryCandidate ctDiscCandidateFromObservation(
 
 /// Multicast listener source.
 final class CtDiscDiscoverySource
-    implements DiscoverySource, ProbeCapableDiscoverySource {
+    implements ChannelDiscoverySource, ProbeCapableDiscoverySource {
   CtDiscDiscoverySource({
     Future<List<NicEndpoint>> Function({bool includeVirtual})? nicEnumerator,
     Future<RawDatagramSocket> Function(List<String> nicNames)? socketFactory,
@@ -175,6 +175,9 @@ final class CtDiscDiscoverySource
   /// it keeps every address, so a multi-address NIC still labels
   /// announcements from any of its subnets.
   List<NicEndpoint> _attributionNics = const <NicEndpoint>[];
+
+  @override
+  DiscoveryChannel get channel => DiscoveryChannel.ctDisc;
 
   @override
   Stream<DiscoveryCandidate> get candidates => _candidates.stream;

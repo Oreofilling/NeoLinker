@@ -51,13 +51,16 @@ DiscoveryCandidate bleCandidateFromRecord(
 }
 
 /// BLE 发现源：包一层 [UniversalCtScanner]，把记录流映射为候选流。
-final class BleDiscoverySource implements DiscoverySource {
+final class BleDiscoverySource implements ChannelDiscoverySource {
   BleDiscoverySource({UniversalCtScanner? scanner, DateTime Function()? now})
     : _scanner = scanner ?? UniversalCtScanner(),
       _now = now;
 
   final UniversalCtScanner _scanner;
   final DateTime Function()? _now;
+
+  @override
+  DiscoveryChannel get channel => DiscoveryChannel.ble;
 
   @override
   Stream<DiscoveryCandidate> get candidates => _scanner.records.map(

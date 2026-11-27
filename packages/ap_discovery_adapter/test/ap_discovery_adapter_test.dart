@@ -249,4 +249,10 @@ void main() {
       expect(softapPasswordForModel('SOMEBRAND'), isNull);
     });
   });
+
+  // The composite names a failed start by this channel, so the scan page
+  // can tell the user which channel is not scanning.
+  test('AP source declares the access-point channel', () {
+    expect(ApDiscoverySource().channel, DiscoveryChannel.accessPoint);
+  });
 }

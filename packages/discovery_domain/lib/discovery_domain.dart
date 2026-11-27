@@ -151,6 +151,17 @@ abstract interface class DiscoverySource {
   Future<void> stop();
 }
 
+/// A discovery source that serves exactly one [DiscoveryChannel]; every
+/// channel adapter is one. [CompositeDiscoverySource] reads [channel] to
+/// report a failed start per channel, so the UI can name the channel that
+/// is not scanning. It is a subtype of [DiscoverySource] (a single-channel
+/// source is a discovery source), which also keeps Dart's `is` promotion
+/// working at call sites.
+abstract interface class ChannelDiscoverySource implements DiscoverySource {
+  /// The one channel this source's candidates arrive on.
+  DiscoveryChannel get channel;
+}
+
 /// 跨通道候选归一化：按 macSuffix（缺失退化为 candidateId）合并；
 /// 超时淘汰由调用方按扫描节奏驱动 [sweepExpired]。
 final class DiscoveryRegistry {

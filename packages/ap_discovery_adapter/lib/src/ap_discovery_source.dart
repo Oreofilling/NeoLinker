@@ -59,7 +59,7 @@ List<DiscoveryCandidate> apCandidatesFromNetworks(
 }
 
 /// Polling discovery source over WLAN SSID enumeration.
-final class ApDiscoverySource implements DiscoverySource {
+final class ApDiscoverySource implements ChannelDiscoverySource {
   ApDiscoverySource({
     Future<List<WlanNetwork>?> Function()? scanner,
     Duration pollInterval = kApPollInterval,
@@ -76,6 +76,9 @@ final class ApDiscoverySource implements DiscoverySource {
   final _candidates = StreamController<DiscoveryCandidate>.broadcast();
   Timer? _timer;
   bool _scanning = false;
+
+  @override
+  DiscoveryChannel get channel => DiscoveryChannel.accessPoint;
 
   @override
   Stream<DiscoveryCandidate> get candidates => _candidates.stream;
