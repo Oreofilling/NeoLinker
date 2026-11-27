@@ -260,7 +260,9 @@ enum MacWlanChannel {
 /// 10.15+ exposes Wi-Fi SSIDs only to apps authorized for Location
 /// Services; anything else gets networks whose `ssid` is nil, without an
 /// error. Inside the App Sandbox the location daemon is reachable only
-/// with the `com.apple.security.location` entitlement.
+/// with the location entitlement: the runner declares both
+/// `com.apple.security.personal-information.location` and its legacy
+/// alias `com.apple.security.location`.
 ///
 /// Main-thread only: CLLocationManager must be used from the thread that
 /// created it, and the method-call handler (its sole client) runs there.
@@ -285,8 +287,11 @@ final class MacLocationGate: NSObject, CLLocationManagerDelegate {
   }
 
   var status: Status {
+    // requestWhenInUseAuthorization() grants `.authorizedWhenInUse`;
+    // `CLAuthorizationStatus.authorized` is a deprecated constant, not a
+    // case, so it cannot appear here.
     switch manager.authorizationStatus {
-    case .authorized, .authorizedAlways:
+    case .authorizedWhenInUse, .authorizedAlways:
       return .authorized
     case .denied, .restricted:
       return .denied
