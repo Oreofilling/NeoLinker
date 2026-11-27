@@ -74,6 +74,12 @@ experimental until the checks below pass on a real Mac:
 - `mobile_scanner` camera selection and detection rate.
 - How device web pages handle focus under WKWebView.
 
+Scanning for device hotspots needs Location Services access: macOS only
+shows Wi-Fi network names to apps that have it, and NeoLinker never reads
+your position. The first scan asks for it; while it is not granted the AP
+channel shows as limited, and the AP card's details offer a shortcut to
+the setting.
+
 To get a build, run the CI workflow manually with the build option
 enabled and download the `neolinker-macos-arm64` artifact. It is unsigned:
 right-click the app and choose Open.

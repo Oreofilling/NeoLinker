@@ -21,6 +21,9 @@ import 'package:desktop_app/services/device_web_console.dart';
 import 'package:desktop_app/services/device_web_opener.dart';
 import 'package:desktop_app/services/environment_probe.dart';
 import 'package:desktop_app/services/host_probe.dart';
+import 'package:desktop_app/services/location_settings_opener.dart';
+import 'package:desktop_app/services/mac_wlan.dart'
+    show MacLocationStatus;
 import 'package:desktop_app/services/settings_store.dart';
 import 'package:desktop_app/services/wifi_settings_opener.dart';
 import 'package:desktop_app/shell/widgets/scan_radar.dart';
@@ -67,6 +70,7 @@ Future<void> pumpApp(
   ProvisioningController controller, {
   SettingsStore? settings,
   WifiSettingsOpener? wifiSettingsOpener,
+  LocationSettingsOpener? locationSettingsOpener,
   HostProbe? hostProbe,
   DeviceWebOpener? consoleBrowserOpener,
 }) async {
@@ -84,6 +88,7 @@ Future<void> pumpApp(
       controller: controller,
       settings: settings ?? SettingsStore.none(),
       wifiSettingsOpener: wifiSettingsOpener,
+      locationSettingsOpener: locationSettingsOpener,
       hostProbe: hostProbe,
       consoleBrowserOpener: consoleBrowserOpener,
     ),
@@ -1438,6 +1443,65 @@ void main() {
     await settle(tester, 2);
     expect(opened, 1);
 
+    await tester.pump(const Duration(seconds: 21));
+    expect(controller.phase, SessionPhase.scanEmpty);
+  });
+
+  testWidgets(
+      'macOS location denied: AP channel is limited and the detail card '
+      'offers the location settings', (tester) async {
+    // Arrange: Wi-Fi adapter on, but CoreWLAN hides SSIDs because Location
+    // Services authorization is missing → AP limited / location_denied.
+    final source = FakeSource();
+    final device = FakeCtDevice();
+    final controller = ProvisioningController(
+      environmentProbe: DesktopEnvironmentProbe(
+        probeBle: () async => const CtEnvironmentReport(
+          readiness: CtBleReadiness.ready,
+          detail: 'fake ready',
+        ),
+        enumerateAdapters: () async =>
+            '[{"Name":"Wi-Fi","Status":"Up","PhysicalMediaType":"Native 802.11"}]',
+        locationStatus: () async => MacLocationStatus.denied,
+        nicEnumerator: ({bool includeVirtual = false}) async => [],
+      ),
+      discoverySource: source,
+      establishPairing: (_) async {},
+      connectChannel: (_, __) async => device,
+      linkEvents: (_) => const Stream<bool>.empty(),
+      selfCheckHold: Duration.zero,
+    );
+    addTearDown(source.close);
+    addTearDown(device.close);
+    addTearDown(controller.dispose);
+
+    var opened = 0;
+    await pumpApp(
+      tester,
+      controller,
+      locationSettingsOpener: () async {
+        opened++;
+        return true;
+      },
+    );
+    await settle(tester); // self-check passes → scan page
+
+    // Assert: the strip shows the limited channel; the remedy lives on the
+    // expanded detail card only, in the slot the Wi-Fi remedy uses.
+    expect(find.text('AP 受限'), findsOneWidget);
+    expect(find.text('打开系统定位服务设置'), findsNothing);
+    await tester.tap(find.text('查看详情'));
+    await settle(tester, 2);
+    expect(find.text('打开系统定位服务设置'), findsOneWidget);
+    // The blocker is location, not the adapter: no Wi-Fi remedy here.
+    expect(find.text('打开系统 Wi-Fi 设置'), findsNothing);
+
+    // Act: the remedy opens the system location settings.
+    await tester.tap(find.text('打开系统定位服务设置'));
+    await settle(tester, 2);
+    expect(opened, 1);
+
+    // Pump past the scan window so no timer dangles at teardown.
     await tester.pump(const Duration(seconds: 21));
     expect(controller.phase, SessionPhase.scanEmpty);
   });

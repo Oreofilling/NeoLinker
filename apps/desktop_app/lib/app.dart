@@ -9,6 +9,7 @@ import 'services/device_web_console.dart';
 import 'services/mac_wlan.dart';
 import 'services/device_web_opener.dart';
 import 'services/host_probe.dart';
+import 'services/location_settings_opener.dart';
 import 'services/settings_store.dart';
 import 'services/wifi_settings_opener.dart';
 import 'shell/shell.dart';
@@ -25,6 +26,7 @@ class NeoLinkerApp extends StatefulWidget {
     this.controller,
     this.settings,
     this.wifiSettingsOpener,
+    this.locationSettingsOpener,
     this.hostProbe,
     this.consoleBrowserOpener,
   });
@@ -37,6 +39,9 @@ class NeoLinkerApp extends StatefulWidget {
 
   /// 直通扫描页的「打开系统 Wi-Fi 设置」动作（测试注入）。
   final WifiSettingsOpener? wifiSettingsOpener;
+
+  /// 直通扫描页的「打开系统定位服务设置」动作（测试注入，macOS）。
+  final LocationSettingsOpener? locationSettingsOpener;
 
   /// 直通扫描页的 LAN 控制台探测与浏览器按钮（测试注入）。
   final HostProbe? hostProbe;
@@ -98,6 +103,7 @@ class _NeoLinkerAppState extends State<NeoLinkerApp> {
         controller: _controller,
         dark: _mode == ThemeMode.dark,
         wifiSettingsOpener: widget.wifiSettingsOpener,
+        locationSettingsOpener: widget.locationSettingsOpener,
         hostProbe: widget.hostProbe,
         consoleBrowserOpener: widget.consoleBrowserOpener,
         onToggleTheme: () {

@@ -25,6 +25,8 @@ extension ChannelL10n on AppLocalizations {
     'unsupported' => reasonUnsupported,
     'no_wlan_adapter' => reasonNoWlanAdapter,
     'wlan_disabled' => reasonWlanDisabled,
+    'location_denied' => reasonLocationDenied,
+    'location_pending' => reasonLocationPending,
     'adapter_probe_failed' => reasonAdapterProbeFailed,
     'reserved' => reasonReserved,
     'no_nic' => reasonNoNic,

@@ -14,6 +14,8 @@ import 'package:provisioning_session/provisioning_session.dart';
 
 import 'package:desktop_app/provisioning/provisioning_controller.dart';
 import 'package:desktop_app/services/environment_probe.dart';
+import 'package:desktop_app/services/mac_wlan.dart'
+    show MacApScanBlocker, MacLocationStatus;
 
 import 'provisioning_fakes.dart';
 
@@ -1481,6 +1483,124 @@ void main() {
         'merged candidate did not connect',
       );
       expect(connectIds, ['ble-1']);
+    });
+  });
+
+  // macOS AP scans report what keeps them from seeing networks (the
+  // location prompt, a denial). The sweep tick compares that blocker with
+  // the last one seen and refreshes the environment report on a change, so
+  // the channel strip never claims an available AP channel while gated.
+  group('macOS AP scan blocker', () {
+    ProvisioningController buildWithBlocker(
+      FakeSource source, {
+      required MacApScanBlocker? Function() macApBlocker,
+      required MacLocationStatus Function() location,
+      required Future<CtEnvironmentReport> Function() probeBle,
+    }) =>
+        ProvisioningController(
+          environmentProbe: DesktopEnvironmentProbe(
+            probeBle: probeBle,
+            enumerateAdapters: () async =>
+                '[{"Name":"Wi-Fi","Status":"Up",'
+                '"PhysicalMediaType":"Native 802.11"}]',
+            locationStatus: () async => location(),
+            nicEnumerator: ({bool includeVirtual = false}) async => [],
+          ),
+          discoverySource: source,
+          establishPairing: (_) async {},
+          connectChannel: (_, __) async => FakeCtDevice(),
+          linkEvents: (_) => const Stream<bool>.empty(),
+          macApBlocker: macApBlocker,
+          selfCheckHold: Duration.zero,
+          sweepInterval: const Duration(milliseconds: 20),
+        );
+
+    test('a new blocker refreshes the report without leaving scanning',
+        () async {
+      // Arrange: the self-check lands in scanning with the location gate
+      // not asked yet, so the report calls the AP channel ready.
+      final source = FakeSource();
+      var probes = 0;
+      MacApScanBlocker? blocker;
+      var location = MacLocationStatus.notRequested;
+      final controller = buildWithBlocker(
+        source,
+        macApBlocker: () => blocker,
+        location: () => location,
+        probeBle: () async {
+          probes++;
+          return const CtEnvironmentReport(
+            readiness: CtBleReadiness.ready,
+            detail: 'fake ready',
+          );
+        },
+      );
+      addTearDown(controller.dispose);
+      addTearDown(source.close);
+      await controller.runSelfCheck();
+      await until(
+        () => controller.phase == SessionPhase.scanning,
+        'selfcheck did not enter scanning',
+      );
+      final first = probes;
+      ChannelReadiness? ap() =>
+          controller.environmentReport?.channel(DiscoveryChannel.accessPoint);
+      expect(ap()?.reason, 'ready');
+
+      // Act: the first AP poll requests the location prompt.
+      blocker = MacApScanBlocker.locationPending;
+      location = MacLocationStatus.pending;
+      await until(
+        () => ap()?.reason == kLocationPendingReason,
+        'report did not pick up the AP blocker',
+      );
+
+      // Assert
+      expect(ap()?.capability, ChannelCapability.limited);
+      expect(probes, first + 1);
+      expect(controller.phase, SessionPhase.scanning);
+      expect(source.startCount, 1);
+
+      // The user answers the prompt: the poll gets through again.
+      blocker = null;
+      location = MacLocationStatus.authorized;
+      await until(
+        () => ap()?.reason == 'ready',
+        'report did not recover after the blocker cleared',
+      );
+      expect(controller.phase, SessionPhase.scanning);
+      expect(source.startCount, 1);
+    });
+
+    test('an unchanged blocker does not re-run the probe', () async {
+      // Arrange
+      final source = FakeSource();
+      var probes = 0;
+      final controller = buildWithBlocker(
+        source,
+        macApBlocker: () => MacApScanBlocker.locationDenied,
+        location: () => MacLocationStatus.denied,
+        probeBle: () async {
+          probes++;
+          return const CtEnvironmentReport(
+            readiness: CtBleReadiness.ready,
+            detail: 'fake ready',
+          );
+        },
+      );
+      addTearDown(controller.dispose);
+      addTearDown(source.close);
+      await controller.runSelfCheck();
+      await until(
+        () => probes == 2,
+        'sweep did not refresh once for the new blocker',
+      );
+
+      // Act: plenty of further sweep ticks
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+
+      // Assert
+      expect(probes, 2);
     });
   });
 }

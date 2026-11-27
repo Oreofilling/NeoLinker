@@ -39,6 +39,7 @@ class ProvisioningController extends ChangeNotifier {
     )?
     connectChannel,
     Stream<bool> Function(String deviceId)? linkEvents,
+    MacApScanBlocker? Function()? macApBlocker,
     ApJoiner? apJoiner,
     ProvTransport Function(Uri endpoint)? apTransportFactory,
     DeviceWebOpener? webPageOpener,
@@ -67,6 +68,7 @@ class ProvisioningController extends ChangeNotifier {
            ((deviceId, onStep) =>
                UniversalCtGattChannel.open(deviceId, onStep: onStep)),
        _linkEvents = linkEvents ?? universalLinkEvents,
+       _macApBlocker = macApBlocker ?? defaultMacApBlocker(),
        // M5 softAP join chain: default joiner is a lazy no-op off Windows
        // (methods refuse early), so constructing here is always safe.
        _apJoiner = apJoiner ?? WinWlanJoiner(),
@@ -113,6 +115,10 @@ class ProvisioningController extends ChangeNotifier {
   )
   _connect;
   final Stream<bool> Function(String deviceId) _linkEvents;
+  // macOS AP scans report what keeps them from seeing networks (see
+  // MacApScanGate); the sweep tick reads it.
+  final MacApScanBlocker? Function() _macApBlocker;
+  MacApScanBlocker? _lastApBlocker;
   final ApJoiner _apJoiner;
   final ProvTransport Function(Uri endpoint)? _apTransportFactory;
   final DeviceWebOpener _webOpener;
@@ -1233,6 +1239,7 @@ class ProvisioningController extends ChangeNotifier {
     }
     if (_sweepTimer != null) return;
     _sweepTimer = Timer.periodic(sweepInterval, (_) {
+      _syncApBlocker();
       if (_machine.phase == SessionPhase.scanning) {
         // 候选超时刷新：超过 ttl 未再见到即移除（设备仍在广播会重新入表）。
         // CT-Disc legs carry their own liveness map and hold 30 s
@@ -1263,6 +1270,19 @@ class ProvisioningController extends ChangeNotifier {
         notifyListeners();
       }
     });
+  }
+
+  /// The macOS AP poll reports what keeps it from seeing networks (the
+  /// location prompt, a denial). A change re-reads the environment: the
+  /// location gate is part of the AP channel's readiness, and outside the
+  /// self-check phase the re-check only refreshes the report. Level-
+  /// triggered on purpose — a change landing while a refresh is in flight
+  /// is still picked up by the next tick.
+  void _syncApBlocker() {
+    final blocker = _macApBlocker();
+    if (blocker == _lastApBlocker) return;
+    _lastApBlocker = blocker;
+    unawaited(runSelfCheck());
   }
 
   /// 进入扫描相位：新任务用新注册表；连续扫描——出候选不停源，射频

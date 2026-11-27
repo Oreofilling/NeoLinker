@@ -12,6 +12,7 @@ import '../../provisioning/provisioning_controller.dart';
 import '../../services/device_web_opener.dart';
 import '../../services/environment_probe.dart';
 import '../../services/host_probe.dart';
+import '../../services/location_settings_opener.dart';
 import '../../services/wifi_settings_opener.dart';
 import '../widgets/scan_radar.dart';
 import '../widgets/web_console_dialog.dart';
@@ -41,6 +42,7 @@ class ScanPage extends StatefulWidget {
     required this.controller,
     this.onOpenGuide,
     this.wifiSettingsOpener,
+    this.locationSettingsOpener,
     this.hostProbe,
     this.consoleBrowserOpener,
   });
@@ -51,6 +53,11 @@ class ScanPage extends StatefulWidget {
   /// Test injection for the "open system Wi-Fi settings" action; null
   /// uses the real [openWifiSettings] service.
   final WifiSettingsOpener? wifiSettingsOpener;
+
+  /// Test injection for the "open system Location Services settings"
+  /// action (the macOS remedy of a location-limited AP channel); null
+  /// uses the real [openLocationSettings] service.
+  final LocationSettingsOpener? locationSettingsOpener;
 
   /// Test injection for the LAN console reachability probe; null uses
   /// the real [probeHostPort].
@@ -92,6 +99,27 @@ class _ScanPageState extends State<ScanPage> {
       debugPrint('open Wi-Fi settings failed: $error');
     }
   }
+
+  /// Same non-fatal launch for the macOS Location Services page — the AP
+  /// channel stays limited until the user allows the app there.
+  Future<void> _openLocationSettings() async {
+    final opener = widget.locationSettingsOpener ?? openLocationSettings;
+    try {
+      await opener();
+    } catch (error) {
+      debugPrint('open Location Services settings failed: $error');
+    }
+  }
+
+  /// The ghost "open the system page that fixes this" action of the AP
+  /// detail card (Wi-Fi adapter settings, or Location Services on macOS).
+  Widget _remedyButton(String label, VoidCallback onPressed) => NLButton(
+        label: label,
+        icon: Icons.open_in_new,
+        variant: NLButtonVariant.ghost,
+        size: NLButtonSize.xs,
+        onPressed: onPressed,
+      );
 
   /// Pre-join consent for AP-only rows (M5): joining the device hotspot
   /// disconnects the machine's current Wi-Fi, so the dialog names both
@@ -623,17 +651,22 @@ class _ScanPageState extends State<ScanPage> {
             const SizedBox(height: 8),
             Text(remark, style: NLType.aux.copyWith(color: c.mutedForeground)),
             // M5 task 1: a disabled WLAN adapter is user-fixable, so the
-            // degraded card offers the system Wi-Fi page directly.
+            // degraded card offers the system Wi-Fi page directly. A closed
+            // macOS location gate (CoreWLAN hides SSIDs without it) gets the
+            // same remedy slot for the Location Services page.
             if (entry.channel == DiscoveryChannel.accessPoint &&
                 entry.reason == kWlanDisabledReason) ...[
               const SizedBox(height: 8),
-              NLButton(
-                label: l.scanChannelOpenWifiSettings,
-                icon: Icons.open_in_new,
-                variant: NLButtonVariant.ghost,
-                size: NLButtonSize.xs,
-                onPressed: _openWifiSettings,
-              ),
+              _remedyButton(l.scanChannelOpenWifiSettings, _openWifiSettings),
+            ],
+            if (entry.channel == DiscoveryChannel.accessPoint &&
+                const {
+                  kLocationDeniedReason,
+                  kLocationPendingReason,
+                }.contains(entry.reason)) ...[
+              const SizedBox(height: 8),
+              _remedyButton(
+                  l.scanChannelOpenLocationSettings, _openLocationSettings),
             ],
             // §13.1 NIC picker moved to the settings page (2026-11-17):
             // the card keeps only the read-only mirror below.

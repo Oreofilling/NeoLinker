@@ -25,6 +25,15 @@ const String kWlanMediaType = 'Native 802.11';
 /// Wi-Fi settings page.
 const String kWlanDisabledReason = 'wlan_disabled';
 
+/// AP channel limited because macOS Location Services authorization is
+/// missing: CoreWLAN hides every SSID without it, and only the first-scan
+/// prompt or System Settings can change that.
+const String kLocationDeniedReason = 'location_denied';
+
+/// AP channel limited because the Location Services prompt is still
+/// unanswered.
+const String kLocationPendingReason = 'location_pending';
+
 /// 网卡枚举命令（ConvertTo-Json 单网卡时输出对象而非数组，解析层兼容）。
 const String kAdapterQuery =
     'Get-NetAdapter -Physical | Select-Object Name,Status,PhysicalMediaType'
@@ -119,6 +128,35 @@ List<NetAdapterInfo>? apAdaptersFromMacState(MacWlanAdapterState? state) {
   ];
 }
 
+/// Applies the macOS location gate to an adapter-only AP verdict
+/// ([apChannelReadiness]). An adapter problem outranks the gate: nothing
+/// is gained by blaming location while the radio is missing or off. A
+/// closed gate turns a ready channel `limited` (user-fixable; BLE and
+/// CT-Disc keep working); authorized, not-yet-requested and unknown (other
+/// hosts, probe failure) keep the base verdict.
+ChannelReadiness apReadinessWithLocation(
+  ChannelReadiness base,
+  MacLocationStatus? location,
+) {
+  if (base.capability != ChannelCapability.available) return base;
+  return switch (location) {
+    MacLocationStatus.denied => const ChannelReadiness(
+        channel: DiscoveryChannel.accessPoint,
+        capability: ChannelCapability.limited,
+        reason: kLocationDeniedReason,
+      ),
+    MacLocationStatus.pending => const ChannelReadiness(
+        channel: DiscoveryChannel.accessPoint,
+        capability: ChannelCapability.limited,
+        reason: kLocationPendingReason,
+      ),
+    MacLocationStatus.authorized ||
+    MacLocationStatus.notRequested ||
+    null =>
+      base,
+  };
+}
+
 /// CT-Disc 通道结论（M5：从预留常量升级为真实网卡枚举）：有物理网卡
 /// 即可用（加入组播监听）；只有 VPN/虚拟网卡为受限（NIC 选择器可显式
 /// 勾选）；枚举失败或无任何 IPv4 端点为不可用。
@@ -159,6 +197,7 @@ class DesktopEnvironmentProbe {
   DesktopEnvironmentProbe({
     Future<CtEnvironmentReport> Function()? probeBle,
     Future<String?> Function()? enumerateAdapters,
+    Future<MacLocationStatus?> Function()? locationStatus,
     Future<List<NicEndpoint>> Function({bool includeVirtual})? nicEnumerator,
     this.legTimeout = const Duration(seconds: 10),
   }) : _probeBle = probeBle ?? UniversalCtEnvironment.probe,
@@ -167,10 +206,12 @@ class DesktopEnvironmentProbe {
        _enumerateAdapters = enumerateAdapters == null
            ? _adaptersForHost
            : _adaptersFromJson(enumerateAdapters),
+       _locationStatus = locationStatus ?? _locationStatusForHost,
        _nicEnumerator = nicEnumerator ?? enumerateNicEndpoints;
 
   final Future<CtEnvironmentReport> Function() _probeBle;
   final Future<List<NetAdapterInfo>?> Function() _enumerateAdapters;
+  final Future<MacLocationStatus?> Function() _locationStatus;
   final Future<List<NicEndpoint>> Function({bool includeVirtual})
   _nicEnumerator;
 
@@ -188,14 +229,16 @@ class DesktopEnvironmentProbe {
       _guardedBleProbe().timeout(legTimeout, onTimeout: _bleTimedOut),
       _guardedAdapters().timeout(legTimeout, onTimeout: () => null),
       _guardedNics().timeout(legTimeout, onTimeout: () => null),
+      _guardedLocation().timeout(legTimeout, onTimeout: () => null),
     ]);
     final bleReport = results[0] as CtEnvironmentReport;
     final adapters = results[1] as List<NetAdapterInfo>?;
     final nics = results[2] as List<NicEndpoint>?;
+    final location = results[3] as MacLocationStatus?;
     return EnvironmentCheckReport(
       channels: [
         bleChannelReadiness(bleReport),
-        apChannelReadiness(adapters),
+        apReadinessWithLocation(apChannelReadiness(adapters), location),
         ctDiscChannelReadiness(nics),
       ],
     );
@@ -243,6 +286,21 @@ class DesktopEnvironmentProbe {
       return jsonText == null ? null : parseNetAdapters(jsonText);
     };
   }
+
+  /// Bare catch on purpose: on a macOS test host without a plugin binding
+  /// the channel throws something other than a PlatformException.
+  Future<MacLocationStatus?> _guardedLocation() async {
+    try {
+      return await _locationStatus();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 默认定位结论来源，按宿主分派：macOS 读 CoreLocation 闸门，其余宿主
+  /// 没有定位闸门。先判平台，只有 macOS 会碰通道。
+  static Future<MacLocationStatus?> _locationStatusForHost() async =>
+      Platform.isMacOS ? macWlanLocationStatus() : null;
 
   /// 默认网卡来源，按宿主分派：Windows 走 PowerShell，macOS 读 CoreWLAN
   /// 电源状态，其余宿主不提供网卡信息（结论降级为探测失败）。

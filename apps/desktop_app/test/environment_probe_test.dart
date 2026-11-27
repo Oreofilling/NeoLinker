@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:ble_universal/ble_universal.dart';
 import 'package:ct_disc_adapter/ct_disc_adapter.dart';
 import 'package:desktop_app/services/environment_probe.dart';
+import 'package:desktop_app/services/mac_wlan.dart'
+    show MacLocationStatus;
 import 'package:flutter_test/flutter_test.dart';
 
 // 一块物理网卡的可枚举替身（CT-Disc 腿确定性可用）。
@@ -235,6 +237,91 @@ void main() {
       final readiness = apChannelReadiness(adapters);
       expect(readiness.capability, ChannelCapability.available);
       expect(readiness.reason, 'ready');
+    });
+  });
+
+  // macOS location gate: CoreWLAN hides SSIDs unless the app is authorized
+  // for Location Services, so the AP verdict composes the adapter state
+  // with the location status.
+  group('apReadinessWithLocation', () {
+    const ready = ChannelReadiness(
+      channel: DiscoveryChannel.accessPoint,
+      capability: ChannelCapability.available,
+      reason: 'ready',
+    );
+
+    test('a closed location gate limits an otherwise ready channel', () {
+      final denied = apReadinessWithLocation(ready, MacLocationStatus.denied);
+      expect(denied.capability, ChannelCapability.limited);
+      expect(denied.reason, kLocationDeniedReason);
+
+      final pending = apReadinessWithLocation(ready, MacLocationStatus.pending);
+      expect(pending.capability, ChannelCapability.limited);
+      expect(pending.reason, kLocationPendingReason);
+    });
+
+    test('authorized, not yet requested, and unknown keep the base', () {
+      for (final location in [
+        MacLocationStatus.authorized,
+        MacLocationStatus.notRequested,
+        null,
+      ]) {
+        expect(apReadinessWithLocation(ready, location), same(ready),
+            reason: '$location');
+      }
+    });
+
+    test('an adapter problem outranks the location verdict', () {
+      const disabled = ChannelReadiness(
+        channel: DiscoveryChannel.accessPoint,
+        capability: ChannelCapability.limited,
+        reason: kWlanDisabledReason,
+      );
+      expect(
+        apReadinessWithLocation(disabled, MacLocationStatus.denied),
+        same(disabled),
+      );
+    });
+  });
+
+  group('DesktopEnvironmentProbe location leg', () {
+    DesktopEnvironmentProbe probeWith(
+      Future<MacLocationStatus?> Function() locationStatus, {
+      Duration legTimeout = const Duration(seconds: 10),
+    }) =>
+        DesktopEnvironmentProbe(
+          probeBle: () async => const CtEnvironmentReport(
+            readiness: CtBleReadiness.ready,
+            detail: 'fake ready',
+          ),
+          enumerateAdapters: () async =>
+              '[{"Name":"Wi-Fi","Status":"Up",'
+              '"PhysicalMediaType":"Native 802.11"}]',
+          locationStatus: locationStatus,
+          nicEnumerator: ({bool includeVirtual = false}) async => [],
+          legTimeout: legTimeout,
+        );
+
+    test('a denied location status limits the AP entry; flow proceeds',
+        () async {
+      final report =
+          await probeWith(() async => MacLocationStatus.denied).probe();
+
+      final ap = report.channel(DiscoveryChannel.accessPoint)!;
+      expect(ap.capability, ChannelCapability.limited);
+      expect(ap.reason, kLocationDeniedReason);
+      expect(report.canProceed, isTrue);
+    });
+
+    test('a hung location leg resolves as no verdict after the cap', () async {
+      final report = await probeWith(
+        () => Completer<MacLocationStatus?>().future,
+        legTimeout: const Duration(milliseconds: 50),
+      ).probe();
+
+      final ap = report.channel(DiscoveryChannel.accessPoint)!;
+      expect(ap.capability, ChannelCapability.available);
+      expect(ap.reason, 'ready');
     });
   });
 }
