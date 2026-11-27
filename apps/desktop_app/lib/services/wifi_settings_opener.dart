@@ -11,7 +11,8 @@ import 'dart:io';
 typedef WifiSettingsOpener = Future<bool> Function();
 
 /// Opens the system Wi-Fi settings page: `ms-settings:network-wifi` on
-/// Windows, the Network preference pane on macOS. Other platforms report
+/// Windows, the Network pane on macOS (Ventura and later dropped the
+/// `.prefPane` files the old path pointed at). Other platforms report
 /// false.
 Future<bool> openWifiSettings() async {
   if (Platform.isWindows) {
@@ -24,9 +25,8 @@ Future<bool> openWifiSettings() async {
     return result.exitCode == 0;
   }
   if (Platform.isMacOS) {
-    final result = await Process.run('open', const [
-      '/System/Library/PreferencePanes/Network.prefPane',
-    ]);
+    const pane = 'x-apple.systempreferences:com.apple.preference.network';
+    final result = await Process.run('open', const [pane]);
     return result.exitCode == 0;
   }
   return false;
