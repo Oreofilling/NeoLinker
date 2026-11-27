@@ -416,6 +416,12 @@ void main() {
       expect(all.length, greaterThanOrEqualTo(physical.length));
     });
   });
+
+  // The composite names a failed start by this channel, so the scan page
+  // can tell the user which channel is not scanning.
+  test('CT-Disc source declares the CT-Disc channel', () {
+    expect(CtDiscDiscoverySource().channel, DiscoveryChannel.ctDisc);
+  });
 }
 
 /// RawDatagramSocket wrapper counting close() calls: proves a rebind

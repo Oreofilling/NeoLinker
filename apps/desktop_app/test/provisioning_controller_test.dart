@@ -18,7 +18,7 @@ import 'package:desktop_app/services/environment_probe.dart';
 import 'provisioning_fakes.dart';
 
 ProvisioningController makeController(
-  FakeSource source, {
+  DiscoverySource source, {
   DesktopEnvironmentProbe? probe,
   Future<CtGattChannel> Function(String, void Function(String))? connect,
   Stream<bool> Function(String deviceId)? linkEvents,
@@ -251,6 +251,113 @@ void main() {
     await controller.rescan();
     await until(() => source.startCount == 2, 'rescan did not restart scan');
     expect(controller.candidates, isEmpty);
+  });
+
+  // A machine without Bluetooth (or with the radio off) must still scan
+  // over softAP and CT-Disc: one channel's start failure only degrades.
+
+  test(
+    'a channel whose source fails to start does not stop the others',
+    () async {
+      final ble = FakeSource(channel: DiscoveryChannel.ble)
+        ..startError = StateError('Bluetooth is not available');
+      final ap = FakeSource(channel: DiscoveryChannel.accessPoint);
+      final controller = makeController(CompositeDiscoverySource([ble, ap]));
+      addTearDown(controller.dispose);
+      addTearDown(ble.close);
+      addTearDown(ap.close);
+
+      await controller.runSelfCheck();
+      await until(() => ap.startCount == 1, 'healthy channel did not start');
+
+      expect(controller.phase, SessionPhase.scanning);
+      expect(controller.failedScanChannels, [DiscoveryChannel.ble]);
+
+      ap.emit(apCandidate());
+      await until(
+        () => controller.phase == SessionPhase.resultsAvailable,
+        'candidate did not move phase',
+      );
+      expect(
+        controller.candidates.single.channels,
+        {DiscoveryChannel.accessPoint},
+      );
+    },
+  );
+
+  test('rescan retries the failed channel and keeps scanning', () async {
+    final ble = FakeSource(channel: DiscoveryChannel.ble)
+      ..startError = StateError('Bluetooth is not available');
+    final ap = FakeSource(channel: DiscoveryChannel.accessPoint);
+    final controller = makeController(CompositeDiscoverySource([ble, ap]));
+    addTearDown(controller.dispose);
+    addTearDown(ble.close);
+    addTearDown(ap.close);
+
+    await controller.runSelfCheck();
+    await until(() => ap.startCount == 1, 'healthy channel did not start');
+
+    // Radio still off: the rescan attempts the channel again and carries
+    // on with the others instead of collapsing into the empty result.
+    await controller.rescan();
+    await until(
+      () => ble.startCount == 2 && ap.startCount == 2,
+      'rescan did not restart the sources',
+    );
+    expect(controller.phase, SessionPhase.scanning);
+    expect(controller.failedScanChannels, [DiscoveryChannel.ble]);
+
+    // Radio back on: the next rescan picks the channel up.
+    ble.startError = null;
+    await controller.rescan();
+    await until(
+      () => ble.startCount == 3,
+      'rescan did not retry the failed channel',
+    );
+    expect(controller.failedScanChannels, isEmpty);
+
+    ble.emit(sampleCandidate());
+    await until(
+      () => controller.phase == SessionPhase.resultsAvailable,
+      'candidate did not move phase',
+    );
+    expect(controller.candidates.single.channels, {DiscoveryChannel.ble});
+  });
+
+  test(
+    'every source failing to start converges on the empty result',
+    () async {
+      final ble = FakeSource(channel: DiscoveryChannel.ble)
+        ..startError = StateError('Bluetooth is not available');
+      final ap = FakeSource(channel: DiscoveryChannel.accessPoint)
+        ..startError = StateError('WLAN service unavailable');
+      final controller = makeController(CompositeDiscoverySource([ble, ap]));
+      addTearDown(controller.dispose);
+      addTearDown(ble.close);
+      addTearDown(ap.close);
+
+      await controller.runSelfCheck();
+      await until(
+        () => controller.phase == SessionPhase.scanEmpty,
+        'total start failure did not converge',
+      );
+
+      expect(controller.lastProblem!.reason, 'source_start_failed');
+      // Nothing scans any more, so no channel counts as missing.
+      expect(controller.failedScanChannels, isEmpty);
+    },
+  );
+
+  test('a plain source reports no failed channel', () async {
+    final source = FakeSource();
+    final controller = makeController(source);
+    addTearDown(controller.dispose);
+    addTearDown(source.close);
+
+    await controller.runSelfCheck();
+    await until(() => source.startCount == 1, 'selfcheck did not start scan');
+
+    expect(controller.failedScanChannels, isEmpty);
   });
 
   // v6 连续扫描：候选 TTL 过期扫空后自动重开扫描窗口。

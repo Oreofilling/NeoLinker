@@ -112,4 +112,10 @@ void main() {
       );
     });
   });
+
+  // The composite names a failed start by this channel, so the scan page
+  // can tell the user which channel is not scanning.
+  test('BLE source declares the BLE channel', () {
+    expect(BleDiscoverySource().channel, DiscoveryChannel.ble);
+  });
 }

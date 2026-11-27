@@ -431,30 +431,243 @@ void main() {
       await composite.stop();
       await composite.stop();
       expect(stopCalls, 1);
+
+      // …and the cycle repeats: a start() with nothing left to do must not
+      // leave the "start in flight" slot occupied for the next one.
+      await composite.start();
+      expect(startCalls, 2);
+    });
+
+    // One channel's radio must not decide for the others: a machine with
+    // no Bluetooth still needs its softAP and CT-Disc channels.
+
+    test('a child that fails to start leaves its siblings running', () async {
+      final composite = CompositeDiscoverySource([
+        _refusingToStart(DiscoveryChannel.ble, StateError('radio off')),
+        fake,
+      ]);
+      final received = <DiscoveryCandidate>[];
+      final sub = composite.candidates.listen(received.add);
+
+      await composite.start();
+
+      expect(startCalls, 1);
+      expect(composite.startErrors.keys, [DiscoveryChannel.ble]);
+      emissions!.add(bleCandidate('A1B2C3'));
+      await Future<void>.delayed(Duration.zero);
+      expect(received, hasLength(1));
+
+      await composite.stop();
+      await sub.cancel();
+    });
+
+    test('a failing child without a declared channel is not listed', () async {
+      final composite = CompositeDiscoverySource([
+        _CountingSource.custom(
+          onStart: () => throw StateError('boom'),
+          stream: _silent,
+        ),
+        fake,
+      ]);
+
+      await composite.start();
+
+      expect(startCalls, 1);
+      expect(composite.startErrors, isEmpty);
+    });
+
+    test('throws only when every child fails to start', () async {
+      final radioOff = StateError('radio off');
+      final composite = CompositeDiscoverySource([
+        _refusingToStart(DiscoveryChannel.ble, radioOff),
+        _refusingToStart(
+          DiscoveryChannel.accessPoint,
+          StateError('WLAN service unavailable'),
+        ),
+      ]);
+
+      await expectLater(composite.start(), throwsA(same(radioOff)));
+      expect(composite.startErrors.keys, [
+        DiscoveryChannel.ble,
+        DiscoveryChannel.accessPoint,
+      ]);
+    });
+
+    test('a failed child is retried; running ones are not restarted', () async {
+      Object? radioOff = StateError('radio off');
+      var bleAttempts = 0;
+      final ble = _ChannelSource(
+        channel: DiscoveryChannel.ble,
+        onStart: () {
+          bleAttempts++;
+          final error = radioOff;
+          if (error != null) throw error;
+        },
+        stream: _silent,
+      );
+      final composite = CompositeDiscoverySource([ble, fake]);
+
+      await composite.start();
+      expect(composite.startErrors.keys, [DiscoveryChannel.ble]);
+
+      // Still off: only the failed child is attempted again.
+      await composite.start();
+      expect(bleAttempts, 2);
+      expect(startCalls, 1);
+
+      radioOff = null;
+      await composite.start();
+      expect(bleAttempts, 3);
+      expect(startCalls, 1);
+      expect(composite.startErrors, isEmpty);
+    });
+
+    test('starts cleanly again after every child failed', () async {
+      Object? outage = StateError('radio stack down');
+      final composite = CompositeDiscoverySource([
+        _ChannelSource(
+          channel: DiscoveryChannel.ble,
+          onStart: () {
+            if (outage != null) throw outage;
+          },
+          stream: () => emissions!.stream,
+        ),
+      ]);
+      await expectLater(composite.start(), throwsA(isA<StateError>()));
+
+      outage = null;
+      await composite.start();
+      final received = <DiscoveryCandidate>[];
+      final sub = composite.candidates.listen(received.add);
+      emissions!.add(bleCandidate('A1B2C3'));
+      await Future<void>.delayed(Duration.zero);
+      expect(received, hasLength(1));
+
+      await composite.stop();
+      await sub.cancel();
+    });
+
+    test('concurrent starts share one attempt per child', () async {
+      final radioReady = Completer<void>();
+      var attempts = 0;
+      final composite = CompositeDiscoverySource([
+        _ChannelSource(
+          channel: DiscoveryChannel.ble,
+          onStart: () {
+            attempts++;
+            return radioReady.future;
+          },
+          stream: _silent,
+        ),
+      ]);
+
+      final first = composite.start();
+      final second = composite.start();
+      radioReady.complete();
+      await first;
+      await second;
+
+      expect(attempts, 1);
+    });
+
+    test('stop after a partial start stops every child', () async {
+      var radioOffStops = 0;
+      final composite = CompositeDiscoverySource([
+        _ChannelSource(
+          channel: DiscoveryChannel.ble,
+          onStart: () => throw StateError('radio off'),
+          onStop: () => radioOffStops++,
+          stream: _silent,
+        ),
+        fake,
+      ]);
+      await composite.start();
+      expect(composite.startErrors, isNotEmpty);
+
+      await composite.stop();
+
+      expect(radioOffStops, 1);
+      expect(stopCalls, 1);
+      expect(composite.startErrors, isEmpty);
+    });
+
+    test('a child that fails to stop keeps the others stopped', () async {
+      final stuck = StateError('scan could not be stopped');
+      final composite = CompositeDiscoverySource([
+        _ChannelSource(
+          channel: DiscoveryChannel.ble,
+          onStop: () => throw stuck,
+          stream: _silent,
+        ),
+        fake,
+      ]);
+      await composite.start();
+
+      await expectLater(composite.stop(), throwsA(same(stuck)));
+      expect(stopCalls, 1);
+
+      // The failure left no residue: the next window forwards again.
+      await composite.start();
+      final received = <DiscoveryCandidate>[];
+      final sub = composite.candidates.listen(received.add);
+      emissions!.add(bleCandidate('A1B2C3'));
+      await Future<void>.delayed(Duration.zero);
+      expect(received, hasLength(1));
+      await sub.cancel();
     });
   });
 }
 
-/// Test double implementing the port with injected behavior.
+/// Test double implementing the port with injected behavior; the hooks may
+/// be async (a start that waits on a radio).
 class _CountingSource implements DiscoverySource {
   _CountingSource.custom({
-    void Function()? onStart,
-    void Function()? onStop,
+    FutureOr<void> Function()? onStart,
+    FutureOr<void> Function()? onStop,
     required Stream<DiscoveryCandidate> Function() stream,
   })  : _onStart = onStart,
         _onStop = onStop,
         _stream = stream;
 
-  final void Function()? _onStart;
-  final void Function()? _onStop;
+  final FutureOr<void> Function()? _onStart;
+  final FutureOr<void> Function()? _onStop;
   final Stream<DiscoveryCandidate> Function() _stream;
 
   @override
   Stream<DiscoveryCandidate> get candidates => _stream();
 
   @override
-  Future<void> start() async => _onStart?.call();
+  Future<void> start() async {
+    await _onStart?.call();
+  }
 
   @override
-  Future<void> stop() async => _onStop?.call();
+  Future<void> stop() async {
+    await _onStop?.call();
+  }
 }
+
+/// [_CountingSource] bound to one channel, the way the real adapters are.
+class _ChannelSource extends _CountingSource implements ChannelDiscoverySource {
+  _ChannelSource({
+    required this.channel,
+    super.onStart,
+    super.onStop,
+    required super.stream,
+  }) : super.custom();
+
+  @override
+  final DiscoveryChannel channel;
+}
+
+/// A candidate stream that never emits.
+Stream<DiscoveryCandidate> _silent() =>
+    const Stream<DiscoveryCandidate>.empty();
+
+/// A channel-bound child whose start() always throws [error].
+_ChannelSource _refusingToStart(DiscoveryChannel channel, Object error) =>
+    _ChannelSource(
+      channel: channel,
+      onStart: () => throw error,
+      stream: _silent,
+    );
